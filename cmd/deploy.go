@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mini-porter/internal/config"
 	"mini-porter/internal/docker"
+	"mini-porter/internal/k8s"
 
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,23 @@ var deployCmd = &cobra.Command{
 		// Push Docker image
 		if err := docker.PushDockerImage(ctx, cfg.Image); err != nil {
 			fmt.Printf("Error pushing image: %v\n", err)
+			return
+		}
+
+		// k8s deployment
+		client, err := k8s.GetClient()
+		if err != nil {
+			fmt.Printf("Error getting k8s client: %v\n", err)
+			return
+		}
+
+		if err := k8s.CreateDeployment(client, cfg); err != nil {
+			fmt.Printf("Error creating deployment: %v\n", err)
+			return
+		}
+
+		if err := k8s.CreateService(client, cfg); err != nil {
+			fmt.Printf("Error creating service: %v\n", err)
 			return
 		}
 	},
