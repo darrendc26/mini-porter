@@ -68,6 +68,40 @@ go install github.com/darrendc26/mini-porter@latest
 
 ---
 
+## Prerequisites
+
+Ensure the following are installed and running before using mini-porter:
+
+* Docker (for building and pushing container images)
+* Kubernetes cluster (e.g., Minikube or kind)
+* kubectl configured to access your cluster
+
+---
+
+### Verify setup
+
+```bash
+docker --version
+kubectl get nodes
+```
+
+---
+
+### Start a local cluster (if needed)
+
+Using Minikube:
+
+```bash
+minikube start
+```
+
+Or using kind:
+
+```bash
+kind create cluster
+```
+---
+
 ## Requirements
 
 To deploy an application, your project must include:
