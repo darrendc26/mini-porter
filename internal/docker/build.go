@@ -8,7 +8,7 @@ import (
 )
 
 func BuildDockerImage(ctx context.Context, image string) error {
-	fmt.Println("[1/4] Building image...")
+	fmt.Println("[1/5] Building image...")
 	cmd := exec.CommandContext(ctx, "docker", "build", "-t", image, ".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

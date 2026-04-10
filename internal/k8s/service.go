@@ -14,7 +14,7 @@ import (
 )
 
 func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
-	fmt.Println("[4/4] Creating service...")
+	fmt.Println("[4/5] Creating service...")
 
 	servicesClient := client.CoreV1().Services("default")
 

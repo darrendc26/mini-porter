@@ -9,7 +9,7 @@ import (
 )
 
 func PushDockerImage(ctx context.Context, image string) error {
-	fmt.Println("[2/4] Pushing image...")
+	fmt.Println("[2/5] Pushing image...")
 	cmd := exec.CommandContext(ctx, "docker", "push", image)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

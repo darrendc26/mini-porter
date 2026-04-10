@@ -14,7 +14,7 @@ import (
 )
 
 func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
-	fmt.Println("[3/4] Creating deployment and service...")
+	fmt.Println("[3/5] Creating deployment and service...")
 	deploymentsClient := client.AppsV1().Deployments("default")
 
 	deployment := &appsv1.Deployment{
