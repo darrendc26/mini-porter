@@ -3,8 +3,9 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
 	"time"
+
+	"github.com/darrendc26/mini-porter/internal/config"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"

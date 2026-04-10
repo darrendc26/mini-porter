@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 
-	"mini-porter/internal/config"
-	"mini-porter/internal/k8s"
+	"github.com/darrendc26/mini-porter/internal/config"
+	"github.com/darrendc26/mini-porter/internal/k8s"
 
 	"github.com/spf13/cobra"
 )

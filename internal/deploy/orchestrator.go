@@ -3,9 +3,10 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
-	"mini-porter/internal/docker"
-	"mini-porter/internal/k8s"
+
+	"github.com/darrendc26/mini-porter/internal/config"
+	"github.com/darrendc26/mini-porter/internal/docker"
+	"github.com/darrendc26/mini-porter/internal/k8s"
 )
 
 func Deploy(ctx context.Context, cfg *config.Config) error {

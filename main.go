@@ -1,8 +1,8 @@
 package main
 
 import (
-	"mini-porter/cmd"
-	"mini-porter/internal/logger"
+	"github.com/darrendc26/mini-porter/cmd"
+	"github.com/darrendc26/mini-porter/internal/logger"
 )
 
 func main() {

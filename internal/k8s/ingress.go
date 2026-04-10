@@ -3,7 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
+
+	"github.com/darrendc26/mini-porter/internal/config"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

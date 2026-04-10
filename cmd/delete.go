@@ -3,8 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
-	"mini-porter/internal/k8s"
+
+	"github.com/darrendc26/mini-porter/internal/config"
+	"github.com/darrendc26/mini-porter/internal/k8s"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -1,4 +1,4 @@
-module mini-porter
+module github.com/darrendc26/mini-porter
 
 go 1.25.4
 

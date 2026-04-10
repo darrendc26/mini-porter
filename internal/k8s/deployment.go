@@ -3,7 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
+
+	"github.com/darrendc26/mini-porter/internal/config"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

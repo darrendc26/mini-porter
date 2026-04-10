@@ -3,8 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"mini-porter/internal/config"
-	"mini-porter/internal/deploy"
+
+	"github.com/darrendc26/mini-porter/internal/config"
+	"github.com/darrendc26/mini-porter/internal/deploy"
 
 	"github.com/spf13/cobra"
 )
