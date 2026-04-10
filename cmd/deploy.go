@@ -15,7 +15,7 @@ var deployCmd = &cobra.Command{
 	Long:  "Deploy an application to a Kubernetes cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
-		cfg, err := config.LoadConfig("porter.yaml")
+		cfg, err := config.LoadConfig("mini-porter.yaml")
 		if err != nil {
 			fmt.Printf("Error loading config: %v\n", err)
 			return

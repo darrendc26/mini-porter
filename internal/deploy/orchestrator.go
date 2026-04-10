@@ -26,10 +26,19 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("error creating deployment: %v", err)
 	}
 
+	if err := k8s.WaitForDeployment(client, cfg); err != nil {
+		return fmt.Errorf("error waiting for deployment: %v", err)
+	}
+
 	if err := k8s.CreateService(client, cfg); err != nil {
 		return fmt.Errorf("error creating service: %v", err)
 	}
 
+	if err := k8s.CreateIngress(client, cfg); err != nil {
+		return fmt.Errorf("error creating ingress: %v", err)
+	}
+
 	fmt.Println("Deployment completed successfully!")
+	fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }

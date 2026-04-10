@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"mini-porter/internal/config"
-	"os/exec"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -15,7 +14,9 @@ import (
 
 func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 	fmt.Println("[4/4] Creating service...")
+
 	servicesClient := client.CoreV1().Services("default")
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cfg.Name,
@@ -27,9 +28,9 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 			},
 			Ports: []corev1.ServicePort{
 				{
+					Protocol:   corev1.ProtocolTCP,
 					Port:       int32(cfg.Port),
 					TargetPort: intstr.FromInt(cfg.Port),
-					NodePort:   0,
 				},
 			},
 		},
@@ -37,20 +38,61 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 
 	svc, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to create service: %v", err)
+		if apierrors.IsAlreadyExists(err) {
+			fmt.Println("Service exists, updating...")
+
+			existing, err := servicesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get existing service: %w", err)
+			}
+
+			service.ResourceVersion = existing.ResourceVersion
+			service.Spec.ClusterIP = existing.Spec.ClusterIP
+
+			svc, err = servicesClient.Update(context.TODO(), service, metav1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to update service: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create service: %w", err)
+		}
+	} else {
+		fmt.Println("Service created successfully")
 	}
 
-	nodeport := svc.Spec.Ports[0].NodePort
-
-	node_ip := exec.Command("minikube", "ip")
-	output, err := node_ip.Output()
+	svc, err = servicesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get node IP: %v", err)
+		return fmt.Errorf("failed to fetch service: %w", err)
 	}
-	ip := strings.TrimSpace(string(output))
 
-	fmt.Println("Service created successfully")
-	fmt.Printf("App running at http://%s:%d\n", ip, nodeport)
+	if len(svc.Spec.Ports) == 0 {
+		return fmt.Errorf("service has no ports")
+	}
+
+	nodePort := svc.Spec.Ports[0].NodePort
+
+	nodes, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	if len(nodes.Items) == 0 {
+		return fmt.Errorf("no nodes found")
+	}
+
+	nodeIP := ""
+	for _, addr := range nodes.Items[0].Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP {
+			nodeIP = addr.Address
+			break
+		}
+	}
+
+	if nodeIP == "" {
+		return fmt.Errorf("could not determine node IP")
+	}
+
+	fmt.Printf("Your app is live: http://%s:%d\n", nodeIP, nodePort)
 
 	return nil
 }

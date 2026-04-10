@@ -1,0 +1,4 @@
+name: my-app
+image: darrendc26/my-app
+port: 3000
+replicas: 1

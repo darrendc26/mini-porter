@@ -7,12 +7,13 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
 func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
-	fmt.Println("[3/4] Creating deployment...")
+	fmt.Println("[3/4] Creating deployment and service...")
 	deploymentsClient := client.AppsV1().Deployments("default")
 
 	deployment := &appsv1.Deployment{
@@ -39,6 +40,7 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
 									ContainerPort: int32(cfg.Port),
 								},
 							},
+							ImagePullPolicy: corev1.PullIfNotPresent,
 						},
 					},
 				},
@@ -48,7 +50,17 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
 
 	_, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to create deployment: %v", err)
+		if errors.IsAlreadyExists(err) {
+			fmt.Println("Deployment exists, updating...")
+
+			_, err = deploymentsClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+		return err
 	}
 
 	fmt.Println("Deployment created successfully")
