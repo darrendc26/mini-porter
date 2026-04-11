@@ -2,7 +2,11 @@
 
 ## Demo
 
-![demo](examples/node-app/porter-demo.mp4)
+![demo](examples/node-app/porter-demo.gif)
+
+---
+
+## About
 
 mini-porter is a minimal Platform-as-a-Service (PaaS) CLI that lets you deploy applications to Kubernetes with a single command.
 
