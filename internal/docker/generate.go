@@ -12,16 +12,18 @@ import (
 func CreateDockerfile(ctx context.Context, project detector.Project, port int) error {
 	var dockerfileContent string
 
+	// if project.Type == "Dockerfile" {
+	// 	fmt.Printf("Project at %s already has a Dockerfile, skipping generation\n", project.Path)
+	// 	return nil
+	// }
+
 	switch project.Type {
 	case "nodejs":
-		dockerfileContent = fmt.Sprintf(`FROM node:18-alpine AS builder
+		dockerfileContent = fmt.Sprintf(`FROM node:18-alpine 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production
+RUN npm install --omit=dev
 
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 EXPOSE %d
 CMD ["npm", "start"]`, port)
@@ -42,19 +44,20 @@ CMD ["python", "app.py"]`, port)
 		WriteDockerfile(project.Path, dockerfileContent)
 
 	case "golang":
-		dockerfileContent = fmt.Sprintf(`FROM golang:1.22-alpine AS builder
+		dockerfileContent = fmt.Sprintf(`FROM golang:latest AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -ldflags="-s -w" -o app
 
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -a -installsuffix cgo -o app .
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/app .
 EXPOSE %d
-CMD ["./app"]`, port)
+CMD ["/app/app"]`, port)
 		WriteDockerfile(project.Path, dockerfileContent)
 
 	case "java":

@@ -46,7 +46,7 @@ var deleteCmd = &cobra.Command{
 		}
 		fmt.Println("Deployment and service deleted successfully!")
 
-		if err := k8s.DeleteIngress(client, cfg); err != nil {
+		if err := k8s.DeleteIngress(client, cfg, k8s.ServiceInfo{}); err != nil {
 			fmt.Printf("Error deleting ingress: %v\n", err)
 			return
 		}

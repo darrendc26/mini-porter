@@ -13,10 +13,27 @@ import (
 
 // var ingress *networkingv1.Ingress
 
-func CreateIngress(client *kubernetes.Clientset, cfg *config.Config) error {
+func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedServices []ServiceInfo) error {
 	fmt.Println("[5/5] Creating ingress...")
 
 	pathType := networkingv1.PathTypePrefix
+
+	var paths []networkingv1.HTTPIngressPath
+
+	for _, svc := range deployedServices {
+		paths = append(paths, networkingv1.HTTPIngressPath{
+			Path:     "/" + svc.Name,
+			PathType: &pathType,
+			Backend: networkingv1.IngressBackend{
+				Service: &networkingv1.IngressServiceBackend{
+					Name: svc.Name,
+					Port: networkingv1.ServiceBackendPort{
+						Number: int32(svc.Port),
+					},
+				},
+			},
+		})
+	}
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -28,21 +45,7 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config) error {
 					Host: cfg.Name + ".miniporter",
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     "/",
-									PathType: &pathType,
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: cfg.Name,
-											Port: networkingv1.ServiceBackendPort{
-												// TODO: Handle multiple services and ports
-												Number: int32(cfg.Services[0].Port),
-											},
-										},
-									},
-								},
-							},
+							Paths: paths,
 						},
 					},
 				},
@@ -51,26 +54,36 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config) error {
 	}
 
 	ingressesClient := client.NetworkingV1().Ingresses("default")
+
 	_, err := ingressesClient.Create(context.TODO(), ingress, metav1.CreateOptions{})
 	if err != nil {
-		fmt.Println("Ingress already exists...")
+		fmt.Println("Ingress exists, updating...")
 
-		_, err := ingressesClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
+		existing, getErr := ingressesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
+		if getErr != nil {
+			return getErr
+		}
+
+		ingress.ResourceVersion = existing.ResourceVersion
+
+		_, err = ingressesClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
-		fmt.Println("App URL: http://" + cfg.Name + ".miniporter")
-		return err
 	}
 
-	fmt.Println("App URL: http://" + cfg.Name + ".miniporter")
+	fmt.Println("\nApp URLs:")
+	for _, svc := range deployedServices {
+		fmt.Printf("http://%s.miniporter/%s\n", cfg.Name, svc.Name)
+	}
+
 	return nil
 }
 
-func DeleteIngress(client *kubernetes.Clientset, cfg *config.Config) error {
+func DeleteIngress(client *kubernetes.Clientset, cfg *config.Config, svc ServiceInfo) error {
 	fmt.Println("Deleting ingress...")
 	ingressesClient := client.NetworkingV1().Ingresses("default")
-	err := ingressesClient.Delete(context.TODO(), cfg.Name, metav1.DeleteOptions{})
+	err := ingressesClient.Delete(context.TODO(), svc.Name, metav1.DeleteOptions{})
 	if err != nil {
 
 		return err

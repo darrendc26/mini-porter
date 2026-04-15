@@ -33,7 +33,7 @@ var hostAddcmd = &cobra.Command{
 			return
 		}
 
-		entry := fmt.Sprintf("%s %s.miniporter", ip, cfg.Name)
+		entry := fmt.Sprintf("%s %s.mini-porter", ip, cfg.Name)
 
 		command := fmt.Sprintf("echo \"%s\" >> /etc/hosts", entry)
 

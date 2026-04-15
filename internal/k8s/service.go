@@ -13,26 +13,26 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
+func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo ServiceInfo) (string, error) {
 	fmt.Println("[4/5] Creating service...")
 
 	servicesClient := client.CoreV1().Services("default")
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cfg.Name,
+			Name: serviceInfo.Name,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort,
 			Selector: map[string]string{
-				"app": cfg.Name,
+				"app": serviceInfo.Name,
 			},
 			Ports: []corev1.ServicePort{
 				{
 					Protocol: corev1.ProtocolTCP,
 					// TODO: Handle multiple services and ports
-					Port:       int32(cfg.Services[0].Port),
-					TargetPort: intstr.FromInt(cfg.Services[0].Port),
+					Port:       int32(serviceInfo.Port),
+					TargetPort: intstr.FromInt(serviceInfo.Port),
 				},
 			},
 		},
@@ -43,9 +43,9 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 		if apierrors.IsAlreadyExists(err) {
 			fmt.Println("Service exists, updating...")
 
-			existing, err := servicesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
+			existing, err := servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to get existing service: %w", err)
+				return "", fmt.Errorf("failed to get existing service: %w", err)
 			}
 
 			service.ResourceVersion = existing.ResourceVersion
@@ -53,33 +53,33 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 
 			svc, err = servicesClient.Update(context.TODO(), service, metav1.UpdateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to update service: %w", err)
+				return "", fmt.Errorf("failed to update service: %w", err)
 			}
 		} else {
-			return fmt.Errorf("failed to create service: %w", err)
+			return "", fmt.Errorf("failed to create service: %w", err)
 		}
 	} else {
 		fmt.Println("Service created successfully")
 	}
 
-	svc, err = servicesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
+	svc, err = servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to fetch service: %w", err)
+		return "", fmt.Errorf("failed to fetch service: %w", err)
 	}
 
 	if len(svc.Spec.Ports) == 0 {
-		return fmt.Errorf("service has no ports")
+		return "", fmt.Errorf("service has no ports")
 	}
 
 	nodePort := svc.Spec.Ports[0].NodePort
 
 	nodes, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get nodes: %w", err)
+		return "", fmt.Errorf("failed to get nodes: %w", err)
 	}
 
 	if len(nodes.Items) == 0 {
-		return fmt.Errorf("no nodes found")
+		return "", fmt.Errorf("no nodes found")
 	}
 
 	nodeIP := ""
@@ -91,10 +91,10 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 	}
 
 	if nodeIP == "" {
-		return fmt.Errorf("could not determine node IP")
+		return "", fmt.Errorf("could not determine node IP")
 	}
 
-	fmt.Printf("Your app is live: http://%s:%d\n", nodeIP, nodePort)
+	url := fmt.Sprintf("%s is live: http://%s:%d\n", serviceInfo.Name, nodeIP, nodePort)
 
-	return nil
+	return url, nil
 }
