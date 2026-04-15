@@ -21,7 +21,9 @@ var deployCmd = &cobra.Command{
 			fmt.Printf("Error loading config: %v\n", err)
 			return
 		}
-		fmt.Printf("Deploying %s to %s:%d\n", cfg.Name, cfg.Image, cfg.Port)
+		for _, service := range cfg.Services {
+			fmt.Printf("Deploying %s to %s:%d\n", cfg.Name, cfg.Image, service.Port)
+		}
 		fmt.Println("Starting deployment...")
 
 		if err := deploy.Deploy(ctx, cfg); err != nil {

@@ -36,7 +36,8 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config) error {
 										Service: &networkingv1.IngressServiceBackend{
 											Name: cfg.Name,
 											Port: networkingv1.ServiceBackendPort{
-												Number: int32(cfg.Port),
+												// TODO: Handle multiple services and ports
+												Number: int32(cfg.Services[0].Port),
 											},
 										},
 									},

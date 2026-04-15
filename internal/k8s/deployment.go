@@ -37,8 +37,9 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
 							Image: cfg.Image,
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          "http",
-									ContainerPort: int32(cfg.Port),
+									Name: "http",
+									// TODO: Handle multiple services and ports
+									ContainerPort: int32(cfg.Services[0].Port),
 								},
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,

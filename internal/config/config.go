@@ -7,11 +7,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type Service struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path"`
+	Port int    `yaml:"port"`
+	// Replicas int    `yaml:"replicas"`
+}
+
 type Config struct {
-	Name     string `yaml:"name"`
-	Image    string `yaml:"image"`
-	Port     int    `yaml:"port"`
-	Replicas int    `yaml:"replicas"`
+	Name     string    `yaml:"name"`
+	Image    string    `yaml:"image"`
+	Replicas int       `yaml:"replicas"`
+	Services []Service `yaml:"services"`
 }
 
 func LoadConfig(path string) (*Config, error) {

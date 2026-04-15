@@ -29,9 +29,10 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config) error {
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Protocol:   corev1.ProtocolTCP,
-					Port:       int32(cfg.Port),
-					TargetPort: intstr.FromInt(cfg.Port),
+					Protocol: corev1.ProtocolTCP,
+					// TODO: Handle multiple services and ports
+					Port:       int32(cfg.Services[0].Port),
+					TargetPort: intstr.FromInt(cfg.Services[0].Port),
 				},
 			},
 		},

@@ -1,0 +1,16 @@
+name: my-app
+image: darrendc26/my-app
+replicas: 3
+services:
+  - name: go-backend
+    path: /home/darren/Desktop/projects/mini-porter/examples/node-app/go_backend
+    port: 8080
+    # replicas: 2
+
+  - name: node-backend
+    path: /home/darren/Desktop/projects/mini-porter/examples/node-app/node_backend
+    port: 3000
+    # replicas: 1
+
+
+
