@@ -14,7 +14,6 @@ import (
 // var ingress *networkingv1.Ingress
 
 func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedServices []ServiceInfo) error {
-	fmt.Println("[5/5] Creating ingress...")
 
 	pathType := networkingv1.PathTypePrefix
 
@@ -57,7 +56,7 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 
 	_, err := ingressesClient.Create(context.TODO(), ingress, metav1.CreateOptions{})
 	if err != nil {
-		fmt.Println("Ingress exists, updating...")
+		fmt.Println("Ingress 					Exists, updating...")
 
 		existing, getErr := ingressesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
 		if getErr != nil {
@@ -70,11 +69,15 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 		if err != nil {
 			return err
 		}
+	} else {
+		fmt.Println("[6/6] Ingress 					Creating...")
 	}
+
+	fmt.Println("[6/6] Ingress 					Completed")
 
 	fmt.Println("\nApp URLs:")
 	for _, svc := range deployedServices {
-		fmt.Printf("%s is live: http://%s.%s\n", svc.Name, svc.Name, cfg.Name)
+		fmt.Printf("%s is live: http://%s.miniporter/%s\n", svc.Name, cfg.Name, svc.Name)
 	}
 
 	return nil

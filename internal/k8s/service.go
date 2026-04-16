@@ -14,7 +14,7 @@ import (
 )
 
 func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo ServiceInfo) (string, error) {
-	fmt.Println("[4/5] Creating service...")
+	// fmt.Println("[5/6] Service 					creating...")
 
 	servicesClient := client.CoreV1().Services("default")
 
@@ -41,7 +41,7 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo
 	svc, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			fmt.Println("Service exists, updating...")
+			fmt.Println("[5/6] Service 					Exists, updating...")
 
 			existing, err := servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})
 			if err != nil {
@@ -59,7 +59,7 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo
 			return "", fmt.Errorf("failed to create service: %w", err)
 		}
 	} else {
-		fmt.Println("Service created successfully")
+		fmt.Println("[5/6] Service 					Created ")
 	}
 
 	svc, err = servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})

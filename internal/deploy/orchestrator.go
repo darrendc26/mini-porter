@@ -72,6 +72,8 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 
 			deployedServices = append(deployedServices, k8s.ServiceInfo(svc))
 		}
+		fmt.Println("-----------------------------------")
+		fmt.Println(" ")
 	}
 
 	// if err != nil {
@@ -82,10 +84,14 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("error creating ingress: %v", err)
 	}
 
+	if err := k8s.CreateDependencies(ctx, client, cfg); err != nil {
+		return fmt.Errorf("error creating dependencies: %v", err)
+	}
+
 	fmt.Println("Deployment completed successfully!")
-	// for _, url := range urlList {
-	// 	fmt.Println(url)
-	// }
+	for _, url := range urlList {
+		fmt.Println(url)
+	}
 	fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }

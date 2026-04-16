@@ -52,6 +52,30 @@ var statusCmd = &cobra.Command{
 				fmt.Printf("  %s\n", pod.Name)
 			}
 		}
+
+		for _, dep := range cfg.Dependencies {
+			deploymentsClient := client.AppsV1().Deployments("default")
+			deployment, err := deploymentsClient.Get(context.TODO(), dep.Name, metav1.GetOptions{})
+			if err != nil {
+				fmt.Printf("Error getting deployment: %v\n", err)
+				return
+			}
+			fmt.Printf("App: %s\n", dep.Name)
+			fmt.Printf("Replicas: %d/%d\n",
+				deployment.Status.ReadyReplicas, deployment.Status.Replicas)
+
+			pods, err := client.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("app=%s", dep.Name),
+			})
+			if err != nil {
+				fmt.Printf("Error getting pods: %v\n", err)
+				return
+			}
+			fmt.Printf("Pods: \n")
+			for _, pod := range pods.Items {
+				fmt.Printf("  %s\n", pod.Name)
+			}
+		}
 	},
 }
 

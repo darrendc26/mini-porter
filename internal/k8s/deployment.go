@@ -20,7 +20,6 @@ type ServiceInfo struct {
 }
 
 func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc ServiceInfo) error {
-	fmt.Println("[3/5] Creating deployment and service...")
 	deploymentsClient := client.AppsV1().Deployments("default")
 
 	deployment := &appsv1.Deployment{
@@ -58,14 +57,13 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc Serv
 	_, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			fmt.Println("Deployment exists, updating...")
+			fmt.Println("[4/6] Deployment 				Exists, updating...")
 
 			existing, err := deploymentsClient.Get(context.TODO(), svc.Name, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to get existing deployment: %w", err)
 			}
 
-			// Mutate the existing object rather than replacing it wholesale
 			existing.Spec.Replicas = int32Ptr(int32(cfg.Replicas))
 			existing.Spec.Template.Spec.Containers[0].Image = svc.Image
 
@@ -79,7 +77,7 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc Serv
 		return err
 	}
 
-	fmt.Println("Deployment created successfully")
+	fmt.Println("[4/6] Deployment 				Completed")
 	return nil
 }
 

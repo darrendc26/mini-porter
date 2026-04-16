@@ -15,6 +15,8 @@ type Service struct {
 
 type Dependency struct {
 	Name string            `yaml:"name"`
+	Type string            `yaml:"type"`
+	Port int               `yaml:"port"`
 	Env  map[string]string `yaml:"env"`
 }
 

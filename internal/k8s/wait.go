@@ -10,7 +10,7 @@ import (
 )
 
 func WaitForDeployment(client *kubernetes.Clientset, imageName string) error {
-	fmt.Println("Waiting for deployment to be ready...")
+	// fmt.Println("Waiting for deployment to be ready...")
 
 	for {
 		deploymentsClient := client.AppsV1().Deployments("default")

@@ -10,12 +10,13 @@ import (
 )
 
 func CreateDockerfile(ctx context.Context, project detector.Project, port int) error {
+
 	var dockerfileContent string
 
 	dockerfilePath := filepath.Join(project.Path, "Dockerfile")
 
 	if _, err := os.Stat(dockerfilePath); err == nil {
-		fmt.Printf("Project at %s already has a Dockerfile, skipping generation\n", project.Path)
+		fmt.Println("[1/6] Dockerfile                                Already Exists")
 		return nil
 	}
 
@@ -98,11 +99,12 @@ CMD ["./app"]`, port)
 	default:
 		return fmt.Errorf("unsupported project type: %s", project.Type)
 	}
+	fmt.Println("[1/6] Dockerfile                                Created")
 	return nil
 }
 
 func WriteDockerfile(path string, dockerfileContent string) error {
-	fmt.Println("[2/5] Writing Dockerfile...")
+	fmt.Println("[1/6] Dockerfile                                Generating")
 	filePath := filepath.Join(path, "Dockerfile")
 	if err := os.WriteFile(filePath, []byte(dockerfileContent), 0644); err != nil {
 		return fmt.Errorf("Failed to write Dockerfile: %w", err)

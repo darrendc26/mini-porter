@@ -1,0 +1,26 @@
+name: my-app
+image: darrendc26/my-app
+replicas: 1
+services:
+  - name: go-backend
+    path: /home/darren/Desktop/projects/mini-porter/examples/node-app/go_backend
+    port: 8080
+
+  - name: node-backend
+    path: /home/darren/Desktop/projects/mini-porter/examples/node-app/node_backend
+    port: 3000
+    
+dependencies:
+  - name: postgres
+    type: postgres
+    port: 5432
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres 
+      POSTGRES_DB: postgres
+    
+  - name: redis
+    type: redis
+    port: 6379
+    env:
+      REDIS_PASSWORD: redis

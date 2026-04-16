@@ -32,7 +32,7 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		// ✅ Label selector
+		//  Label selector
 		var labelSelector string
 		if serviceName != "" {
 			fmt.Printf("Deleting service: %s\n", serviceName)
@@ -42,7 +42,7 @@ var deleteCmd = &cobra.Command{
 			labelSelector = fmt.Sprintf("app=%s", cfg.Name)
 		}
 
-		// 🔥 Delete Deployments
+		//  Delete Deployments
 		fmt.Println("Deleting deployments...")
 		err = client.AppsV1().Deployments("default").DeleteCollection(
 			ctx,
@@ -54,7 +54,7 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		// 🔥 Delete Services
+		//  Delete Services
 		fmt.Println("Deleting services...")
 		servicesClient := client.CoreV1().Services("default")
 
@@ -75,7 +75,7 @@ var deleteCmd = &cobra.Command{
 			}
 		}
 
-		// 🔥 Delete Pods (cleanup)
+		//  Delete Pods (cleanup)
 		fmt.Println("Deleting pods...")
 		err = client.CoreV1().Pods("default").DeleteCollection(
 			ctx,
@@ -87,7 +87,7 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		// 🔥 Handle ingress
+		//  Handle ingress
 		if serviceName != "" {
 			err = k8s.DeleteIngressRule(client, cfg, serviceName)
 		} else {
@@ -99,7 +99,7 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("✅ Delete completed successfully!")
+		fmt.Println("Delete completed successfully!")
 	},
 }
 

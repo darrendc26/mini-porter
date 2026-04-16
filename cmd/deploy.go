@@ -21,9 +21,11 @@ var deployCmd = &cobra.Command{
 			fmt.Printf("Error loading config: %v\n", err)
 			return
 		}
-		for _, service := range cfg.Services {
-			fmt.Printf("Deploying %s to %s:%d\n", cfg.Name, cfg.Image, service.Port)
-		}
+		// for _, service := range cfg.Services {
+		// 	fmt.Printf("Deploying %s to %s:%s on Docker with Port %d\n", service.Name, cfg.Image, service.Name, service.Port)
+		// }
+		// fmt.Println("-----------------------------------")
+		// fmt.Println(" ")
 		fmt.Println("Starting deployment...")
 
 		if err := deploy.Deploy(ctx, cfg); err != nil {
