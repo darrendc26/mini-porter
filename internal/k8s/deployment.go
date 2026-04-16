@@ -22,8 +22,7 @@ type ServiceInfo struct {
 func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc ServiceInfo) error {
 	fmt.Println("[3/5] Creating deployment and service...")
 	deploymentsClient := client.AppsV1().Deployments("default")
-	fmt.Println("cfg:", cfg)
-	fmt.Println("svc:", svc)
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: svc.Name,
@@ -48,7 +47,7 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc Serv
 									ContainerPort: int32(svc.Port),
 								},
 							},
-							ImagePullPolicy: corev1.PullAlways,
+							ImagePullPolicy: corev1.PullIfNotPresent,
 						},
 					},
 				},

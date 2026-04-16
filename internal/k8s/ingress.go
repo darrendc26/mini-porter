@@ -74,20 +74,71 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 
 	fmt.Println("\nApp URLs:")
 	for _, svc := range deployedServices {
-		fmt.Printf("http://%s.miniporter/%s\n", cfg.Name, svc.Name)
+		fmt.Printf("%s is live: http://%s.%s\n", svc.Name, svc.Name, cfg.Name)
 	}
 
 	return nil
 }
 
-func DeleteIngress(client *kubernetes.Clientset, cfg *config.Config, svc ServiceInfo) error {
+func DeleteIngress(client *kubernetes.Clientset, cfg *config.Config) error {
 	fmt.Println("Deleting ingress...")
 	ingressesClient := client.NetworkingV1().Ingresses("default")
-	err := ingressesClient.Delete(context.TODO(), svc.Name, metav1.DeleteOptions{})
+	err := ingressesClient.Delete(context.TODO(), cfg.Name, metav1.DeleteOptions{})
 	if err != nil {
 
 		return err
 	}
 	fmt.Println("Ingress deleted successfully")
+	return nil
+}
+
+func DeleteIngressRule(client kubernetes.Interface, cfg *config.Config, serviceName string) error {
+	ctx := context.Background()
+
+	ingressClient := client.NetworkingV1().Ingresses("default")
+
+	ingress, err := ingressClient.Get(ctx, cfg.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get ingress: %w", err)
+	}
+
+	// Filter rules
+	for i, rule := range ingress.Spec.Rules {
+		if rule.HTTP == nil {
+			continue
+		}
+
+		var newPaths []networkingv1.HTTPIngressPath
+
+		for _, path := range rule.HTTP.Paths {
+			if path.Backend.Service.Name != serviceName {
+				newPaths = append(newPaths, path)
+			}
+		}
+
+		ingress.Spec.Rules[i].HTTP.Paths = newPaths
+	}
+
+	// 🔥 If no paths left → delete ingress
+	empty := true
+	for _, rule := range ingress.Spec.Rules {
+		if rule.HTTP != nil && len(rule.HTTP.Paths) > 0 {
+			empty = false
+			break
+		}
+	}
+
+	if empty {
+		fmt.Println("No routes left, deleting ingress...")
+		return ingressClient.Delete(ctx, cfg.Name, metav1.DeleteOptions{})
+	}
+
+	// Update ingress
+	_, err = ingressClient.Update(ctx, ingress, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update ingress: %w", err)
+	}
+
+	fmt.Printf("Ingress updated: removed %s\n", serviceName)
 	return nil
 }

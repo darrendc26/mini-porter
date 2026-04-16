@@ -29,26 +29,28 @@ var statusCmd = &cobra.Command{
 			return
 		}
 
-		deploymentsClient := client.AppsV1().Deployments("default")
-		deployment, err := deploymentsClient.Get(ctx, cfg.Name, metav1.GetOptions{})
-		if err != nil {
-			fmt.Printf("Error getting deployment: %v\n", err)
-			return
-		}
-		fmt.Printf("App: %s\n", cfg.Name)
-		fmt.Printf("Replicas: %d/%d\n",
-			deployment.Status.ReadyReplicas, deployment.Status.Replicas)
+		for _, service := range cfg.Services {
+			deploymentsClient := client.AppsV1().Deployments("default")
+			deployment, err := deploymentsClient.Get(ctx, service.Name, metav1.GetOptions{})
+			if err != nil {
+				fmt.Printf("Error getting deployment: %v\n", err)
+				return
+			}
+			fmt.Printf("App: %s\n", service.Name)
+			fmt.Printf("Replicas: %d/%d\n",
+				deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 
-		pods, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("app=%s", cfg.Name),
-		})
-		if err != nil {
-			fmt.Printf("Error getting pods: %v\n", err)
-			return
-		}
-		fmt.Printf("Pods: \n")
-		for _, pod := range pods.Items {
-			fmt.Printf("  %s\n", pod.Name)
+			pods, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{
+				LabelSelector: fmt.Sprintf("app=%s", service.Name),
+			})
+			if err != nil {
+				fmt.Printf("Error getting pods: %v\n", err)
+				return
+			}
+			fmt.Printf("Pods: \n")
+			for _, pod := range pods.Items {
+				fmt.Printf("  %s\n", pod.Name)
+			}
 		}
 	},
 }

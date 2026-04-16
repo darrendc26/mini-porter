@@ -11,12 +11,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var serviceName string
+
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
-	Short: "Delete a deployment",
+	Short: "Delete app or specific service",
 
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
+
 		cfg, err := config.LoadConfig("mini-porter.yaml")
 		if err != nil {
 			fmt.Printf("Error loading config: %v\n", err)
@@ -29,30 +32,78 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("Deleting deployment...")
-		deploymentsClient := client.AppsV1().Deployments("default")
-		err = deploymentsClient.Delete(ctx, cfg.Name, metav1.DeleteOptions{})
+		// ✅ Label selector
+		var labelSelector string
+		if serviceName != "" {
+			fmt.Printf("Deleting service: %s\n", serviceName)
+			labelSelector = fmt.Sprintf("app=%s,service=%s", cfg.Name, serviceName)
+		} else {
+			fmt.Println("Deleting entire app...")
+			labelSelector = fmt.Sprintf("app=%s", cfg.Name)
+		}
+
+		// 🔥 Delete Deployments
+		fmt.Println("Deleting deployments...")
+		err = client.AppsV1().Deployments("default").DeleteCollection(
+			ctx,
+			metav1.DeleteOptions{},
+			metav1.ListOptions{LabelSelector: labelSelector},
+		)
 		if err != nil {
-			fmt.Printf("Error deleting deployment: %v\n", err)
+			fmt.Printf("Error deleting deployments: %v\n", err)
 			return
 		}
 
-		fmt.Println("Deleting service...")
+		// 🔥 Delete Services
+		fmt.Println("Deleting services...")
 		servicesClient := client.CoreV1().Services("default")
-		err = servicesClient.Delete(ctx, cfg.Name, metav1.DeleteOptions{})
-		if err != nil {
-			fmt.Printf("Error deleting service: %v\n", err)
-			return
-		}
-		fmt.Println("Deployment and service deleted successfully!")
 
-		if err := k8s.DeleteIngress(client, cfg, k8s.ServiceInfo{}); err != nil {
-			fmt.Printf("Error deleting ingress: %v\n", err)
+		svcList, err := servicesClient.List(ctx, metav1.ListOptions{
+			LabelSelector: labelSelector,
+		})
+		if err != nil {
+			fmt.Printf("Error listing services: %v\n", err)
 			return
 		}
+
+		for _, svc := range svcList.Items {
+			fmt.Printf("Deleting service: %s\n", svc.Name)
+
+			err := servicesClient.Delete(ctx, svc.Name, metav1.DeleteOptions{})
+			if err != nil {
+				fmt.Printf("Error deleting service %s: %v\n", svc.Name, err)
+			}
+		}
+
+		// 🔥 Delete Pods (cleanup)
+		fmt.Println("Deleting pods...")
+		err = client.CoreV1().Pods("default").DeleteCollection(
+			ctx,
+			metav1.DeleteOptions{},
+			metav1.ListOptions{LabelSelector: labelSelector},
+		)
+		if err != nil {
+			fmt.Printf("Error deleting pods: %v\n", err)
+			return
+		}
+
+		// 🔥 Handle ingress
+		if serviceName != "" {
+			err = k8s.DeleteIngressRule(client, cfg, serviceName)
+		} else {
+			err = k8s.DeleteIngress(client, cfg)
+		}
+
+		if err != nil {
+			fmt.Printf("Error handling ingress: %v\n", err)
+			return
+		}
+
+		fmt.Println("✅ Delete completed successfully!")
 	},
 }
 
 func init() {
+	deleteCmd.Flags().StringVar(&serviceName, "service", "", "Delete specific service")
 	rootCmd.AddCommand(deleteCmd)
 }

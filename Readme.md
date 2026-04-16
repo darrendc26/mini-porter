@@ -30,7 +30,7 @@ It handles:
 * One-command deploy (`mini-porter deploy`)
 * Docker build & push
 * Kubernetes Deployment & Service creation
-* Ingress with custom domain (`.local`)
+* Ingress with custom domain (`.miniporter`)
 * Status inspection (`mini-porter status`)
 * Clean teardown (`mini-porter delete`)
 * Clean architecture (CLI → Orchestrator → Infra modules)
@@ -101,6 +101,7 @@ Using Minikube:
 
 ```bash
 minikube start
+minikube addons enable ingress
 ```
 
 Or using kind:

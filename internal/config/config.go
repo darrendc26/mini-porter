@@ -11,14 +11,19 @@ type Service struct {
 	Name string `yaml:"name"`
 	Path string `yaml:"path"`
 	Port int    `yaml:"port"`
-	// Replicas int    `yaml:"replicas"`
+}
+
+type Dependency struct {
+	Name string            `yaml:"name"`
+	Env  map[string]string `yaml:"env"`
 }
 
 type Config struct {
-	Name     string    `yaml:"name"`
-	Image    string    `yaml:"image"`
-	Replicas int       `yaml:"replicas"`
-	Services []Service `yaml:"services"`
+	Name         string       `yaml:"name"`
+	Image        string       `yaml:"image"`
+	Replicas     int          `yaml:"replicas"`
+	Services     []Service    `yaml:"services"`
+	Dependencies []Dependency `yaml:"dependencies"`
 }
 
 func LoadConfig(path string) (*Config, error) {

@@ -12,10 +12,12 @@ import (
 func CreateDockerfile(ctx context.Context, project detector.Project, port int) error {
 	var dockerfileContent string
 
-	// if project.Type == "Dockerfile" {
-	// 	fmt.Printf("Project at %s already has a Dockerfile, skipping generation\n", project.Path)
-	// 	return nil
-	// }
+	dockerfilePath := filepath.Join(project.Path, "Dockerfile")
+
+	if _, err := os.Stat(dockerfilePath); err == nil {
+		fmt.Printf("Project at %s already has a Dockerfile, skipping generation\n", project.Path)
+		return nil
+	}
 
 	switch project.Type {
 	case "nodejs":

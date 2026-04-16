@@ -83,9 +83,9 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	}
 
 	fmt.Println("Deployment completed successfully!")
-	for _, url := range urlList {
-		fmt.Println(url)
-	}
+	// for _, url := range urlList {
+	// 	fmt.Println(url)
+	// }
 	fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }
