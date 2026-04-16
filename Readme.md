@@ -27,6 +27,7 @@ It handles:
 
 ## Features
 
+* mini-porter.yaml file generation (`mini-porter init`)
 * One-command deploy (`mini-porter deploy`)
 * Docker build & push
 * Kubernetes Deployment & Service creation
@@ -114,11 +115,7 @@ kind create cluster
 ## Requirements
 
 To deploy an application, your project must include:
-
-* A `Dockerfile` — to build the container image
-* A `mini-porter.yaml` — to define deployment configuration
-
-These files should be present in the root of your application.
+Literally nothing... Just a working application is all that's needed.
 
 ---
 
@@ -129,7 +126,10 @@ name: my-app
 image: yourdockerhubusername/my-app
 port: 3000
 replicas: 1
-
+services:
+  - name: my-app
+    path: .
+    port: 3000
 ```
 
 ---
@@ -140,6 +140,8 @@ replicas: 1
 
 ```bash
 cd examples/node-app
+# Generates a mini-porter.yaml file
+mini-porter init
 ```
 
 ---
@@ -179,7 +181,11 @@ mini-porter status
 ### 5. Delete deployment
 
 ```bash
+# Deletes the entire app deployment
 mini-porter delete
+
+# To delete a single service
+mini-porter delete <service-name>
 ```
 
 ---
@@ -194,6 +200,7 @@ mini-porter performs:
 4. Exposes Service (NodePort)
 5. Creates Ingress for domain routing
 6. Optionally adds local DNS entry
+7. Sets up postgres and redis databases (if needed)
 
 ---
 
@@ -230,7 +237,6 @@ Use it to test the full deployment flow.
 * Ingress auto-setup (no manual hosts entry)
 * HTTPS support (cert-manager)
 * Autoscaling (HPA)
-* Multi-app deployments
 * Remote cluster support (AWS/GCP)
 * Web dashboard
 
