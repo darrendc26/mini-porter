@@ -13,32 +13,37 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
-	fmt.Println("[3/5] Creating deployment and service...")
+type ServiceInfo struct {
+	Name  string
+	Port  int
+	Image string
+}
+
+func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc ServiceInfo) error {
 	deploymentsClient := client.AppsV1().Deployments("default")
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cfg.Name,
+			Name: svc.Name,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(int32(cfg.Replicas)),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": cfg.Name},
+				MatchLabels: map[string]string{"app": svc.Name},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": cfg.Name},
+					Labels: map[string]string{"app": svc.Name},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  cfg.Name,
-							Image: cfg.Image,
+							Name:  svc.Name,
+							Image: svc.Image,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
-									ContainerPort: int32(cfg.Port),
+									ContainerPort: int32(svc.Port),
 								},
 							},
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -52,11 +57,19 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
 	_, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			fmt.Println("Deployment exists, updating...")
+			fmt.Println("[4/6] Deployment 				Exists, updating...")
 
-			_, err = deploymentsClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
+			existing, err := deploymentsClient.Get(context.TODO(), svc.Name, metav1.GetOptions{})
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get existing deployment: %w", err)
+			}
+
+			existing.Spec.Replicas = int32Ptr(int32(cfg.Replicas))
+			existing.Spec.Template.Spec.Containers[0].Image = svc.Image
+
+			_, err = deploymentsClient.Update(context.TODO(), existing, metav1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to update deployment: %w", err)
 			}
 
 			return nil
@@ -64,7 +77,7 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config) error {
 		return err
 	}
 
-	fmt.Println("Deployment created successfully")
+	fmt.Println("[4/6] Deployment 				Completed")
 	return nil
 }
 

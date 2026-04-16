@@ -3,15 +3,30 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v2"
 )
 
+type Service struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path"`
+	Port int    `yaml:"port"`
+}
+
+type Dependency struct {
+	Name string            `yaml:"name"`
+	Type string            `yaml:"type"`
+	Port int               `yaml:"port"`
+	Env  map[string]string `yaml:"env"`
+}
+
 type Config struct {
-	Name     string `yaml:"name"`
-	Image    string `yaml:"image"`
-	Port     int    `yaml:"port"`
-	Replicas int    `yaml:"replicas"`
+	Name         string       `yaml:"name"`
+	Image        string       `yaml:"image"`
+	Replicas     int          `yaml:"replicas"`
+	Services     []Service    `yaml:"services"`
+	Dependencies []Dependency `yaml:"dependencies"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -25,5 +40,21 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("Failed to unmarshal: %w", err)
 	}
 
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve config path: %w", err)
+	}
+
+	baseDir := filepath.Dir(absPath)
+
+	for i := range config.Services {
+		if !filepath.IsAbs(config.Services[i].Path) {
+			config.Services[i].Path = filepath.Clean(
+				filepath.Join(baseDir, config.Services[i].Path),
+			)
+		}
+	}
+
+	fmt.Printf("Loaded config: %+v\n", config)
 	return &config, nil
 }

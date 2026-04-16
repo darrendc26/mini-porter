@@ -3,17 +3,24 @@ package docker
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
+	"path/filepath"
 )
 
-func BuildDockerImage(ctx context.Context, image string) error {
-	fmt.Println("[1/5] Building image...")
-	cmd := exec.CommandContext(ctx, "docker", "build", "-t", image, ".")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+func BuildDockerImage(ctx context.Context, image string, path string) error {
+	fmt.Println("[2/6] Building image...")
+
+	cmd := exec.CommandContext(ctx,
+		"docker", "build",
+		"-t", image,
+		"-f", filepath.Join(path, "Dockerfile"),
+		path,
+	)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Failed to build image: %w", err)
 	}
+	fmt.Println("[2/6] Build image				Completed")
 	return nil
 }
