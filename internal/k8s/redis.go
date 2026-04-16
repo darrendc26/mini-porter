@@ -21,6 +21,11 @@ func CreateRedis(ctx context.Context, client *kubernetes.Clientset, dep config.D
 	if err != nil {
 		return fmt.Errorf("Error creating redis service: %v", err)
 	}
+
+	err = wait(ctx, client, &dep)
+	if err != nil {
+		return fmt.Errorf("Error waiting for redis deployment: %v", err)
+	}
 	return nil
 }
 

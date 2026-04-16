@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/darrendc26/mini-porter/internal/config"
+	"github.com/joho/godotenv"
 	appsV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +24,11 @@ func CreatePostgres(ctx context.Context, client *kubernetes.Clientset, dependenc
 	err = createPostgresService(ctx, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error creating postgres service: %v", err)
+	}
+
+	err = wait(ctx, client, &dependency)
+	if err != nil {
+		return fmt.Errorf("Error waiting for postgres deployment: %v", err)
 	}
 
 	return nil
@@ -162,6 +169,11 @@ func createPostgresService(ctx context.Context, client *kubernetes.Clientset, de
 func buildEnvVars(env map[string]string) []corev1.EnvVar {
 	var result []corev1.EnvVar
 
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("No .env file found.")
+	}
+
 	for key, value := range env {
 		if strings.HasPrefix(value, "env.") {
 			envKey := strings.TrimPrefix(value, "env.")
@@ -182,4 +194,19 @@ func buildEnvVars(env map[string]string) []corev1.EnvVar {
 	}
 
 	return result
+}
+
+func wait(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
+	deployment, _ := client.AppsV1().Deployments("default").Get(ctx, dep.Name, metav1.GetOptions{})
+
+	ready := deployment.Status.ReadyReplicas
+	total := *deployment.Spec.Replicas
+
+	fmt.Printf("Pods Ready: %d/%d\n", ready, total)
+
+	if ready == total && total > 0 {
+		return nil
+	}
+	time.Sleep(12 * time.Second)
+	return wait(ctx, client, dep)
 }
