@@ -11,13 +11,19 @@ import (
 	"github.com/joho/godotenv"
 	appsV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 )
 
 func CreatePostgres(ctx context.Context, client *kubernetes.Clientset, dependency config.Dependency) error {
-	err := createPostgresDeployment(ctx, client, &dependency)
+	err := createPostgresPVC(ctx, client, &dependency)
+	if err != nil {
+		return fmt.Errorf("Error creating postgres pvc: %v", err)
+	}
+
+	err = createPostgresDeployment(ctx, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error creating postgres deployment: %v", err)
 	}
@@ -62,6 +68,16 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 					},
 				},
 				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{
+						{
+							Name: "postgres-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: dep.Name + "-pvc",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  dep.Name,
@@ -69,13 +85,20 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 5432},
 							},
+
 							Env: envVars,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "postgres-data",
+									MountPath: "/var/lib/postgresql/data",
+								},
+							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{
 											"pg_isready",
-											"-U", "postgres",
+											"-U", dep.Env["POSTGRES_USER"],
 										},
 									},
 								},
@@ -87,7 +110,7 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 									Exec: &corev1.ExecAction{
 										Command: []string{
 											"pg_isready",
-											"-U", "postgres",
+											"-U", dep.Env["POSTGRES_USER"],
 										},
 									},
 								},
@@ -160,6 +183,43 @@ func createPostgresService(ctx context.Context, client *kubernetes.Clientset, de
 		_, err = serviceClient.Update(ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to update service: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func createPostgresPVC(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
+	pvcClient := client.CoreV1().PersistentVolumeClaims("default")
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: dep.Name + "-pvc",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+
+	_, err := pvcClient.Create(ctx, pvc, metav1.CreateOptions{})
+	if err != nil {
+		existing, err := pvcClient.Get(ctx, dep.Name+"-pvc", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("Failed to get existing pvc: %w", err)
+		}
+
+		existing.Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("1Gi")
+
+		_, err = pvcClient.Update(ctx, existing, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("Failed to update pvc: %w", err)
 		}
 	}
 

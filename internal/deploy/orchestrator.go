@@ -13,7 +13,7 @@ import (
 )
 
 func Deploy(ctx context.Context, cfg *config.Config) error {
-	var urlList []string
+	// var urlList []string
 	var deployedServices []k8s.ServiceInfo
 	wd, err := os.Getwd()
 	if err != nil {
@@ -64,16 +64,14 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("error waiting for deployment: %v", err)
 			}
 
-			if url, err := k8s.CreateService(client, cfg, k8s.ServiceInfo(svc)); err != nil {
+			if err := k8s.CreateService(client, k8s.ServiceInfo(svc)); err != nil {
 				return fmt.Errorf("error creating service: %v", err)
-			} else {
-				urlList = append(urlList, url)
 			}
-
 			deployedServices = append(deployedServices, k8s.ServiceInfo(svc))
+
+			fmt.Println("-----------------------------------")
+			fmt.Println(" ")
 		}
-		fmt.Println("-----------------------------------")
-		fmt.Println(" ")
 	}
 
 	if err := k8s.CreateIngress(client, cfg, deployedServices); err != nil {
@@ -84,10 +82,23 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("error creating dependencies: %v", err)
 	}
 
-	fmt.Println("Deployment completed successfully!")
-	for _, url := range urlList {
+	urls, err := k8s.GetIngressURL(client, deployedServices)
+	if err != nil {
+		return fmt.Errorf("error getting ingress URL: %v", err)
+	}
+
+	fmt.Println("App URL:")
+	for _, url := range urls {
 		fmt.Println(url)
 	}
+
+	fmt.Println("Deployment completed successfully!")
+	// for _, url := range urlList {
+	// 	fmt.Println(url)
+	// }
 	fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }
+
+// 	return fmt.Errorf("no projects found")
+// }

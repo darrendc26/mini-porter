@@ -46,7 +46,7 @@ func CreateDeployment(client *kubernetes.Clientset, cfg *config.Config, svc Serv
 									ContainerPort: int32(svc.Port),
 								},
 							},
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 						},
 					},
 				},
