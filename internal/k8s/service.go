@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/darrendc26/mini-porter/internal/config"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,12 +12,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateService(client *kubernetes.Clientset, serviceInfo ServiceInfo) error {
-	servicesClient := client.CoreV1().Services("default")
+func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo ServiceInfo) error {
+	namespace := cfg.Name
+	servicesClient := client.CoreV1().Services(namespace)
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: serviceInfo.Name,
+			Labels: map[string]string{
+				"app":        serviceInfo.Name,
+				"managed-by": "mini-porter",
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -25,6 +31,7 @@ func CreateService(client *kubernetes.Clientset, serviceInfo ServiceInfo) error 
 			},
 			Ports: []corev1.ServicePort{
 				{
+					Name:       "http",
 					Protocol:   corev1.ProtocolTCP,
 					Port:       int32(serviceInfo.Port),
 					TargetPort: intstr.FromInt(serviceInfo.Port),

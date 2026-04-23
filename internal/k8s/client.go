@@ -1,31 +1,46 @@
 package k8s
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
+	"strings"
 
 	"k8s.io/client-go/kubernetes"
-
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 func GetClient() (*kubernetes.Clientset, error) {
-	// kubeconfig path is usually at ~/.kube/config
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	kubeconfig := filepath.Join(home, ".kube", "config")
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
 
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return nil, err
-	}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules,
+		configOverrides,
+	)
 
-	clientset, err := kubernetes.NewForConfig(config)
+	restConfig, err := kubeConfig.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	return clientset, nil
+	return kubernetes.NewForConfig(restConfig)
+}
+
+func GetCurrentContext() error {
+	cfg, _ := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	ctx := cfg.CurrentContext
+
+	switch {
+	case strings.Contains(ctx, "minikube"):
+		fmt.Println("Current context : minikube")
+
+	case strings.Contains(ctx, "gke"):
+		fmt.Println("Current context : GCP")
+	case strings.Contains(ctx, "eks"):
+		fmt.Println("Current context : AWS")
+	case strings.Contains(ctx, "do-"):
+		fmt.Println("Current context : DigitalOcean")
+	default:
+		fmt.Println("Environment unknown")
+	}
+	return nil
 }

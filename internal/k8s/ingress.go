@@ -16,41 +16,47 @@ import (
 // var ingress *networkingv1.Ingress
 
 func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedServices []ServiceInfo) error {
+	ctx := context.TODO()
+	namespace := cfg.Name
+
 	pathType := networkingv1.PathTypePrefix
 	var paths []networkingv1.HTTPIngressPath
 
-	// 1. Add non-root paths first
+	// Deduplicate paths
+	seen := make(map[string]bool)
+
 	for _, svc := range deployedServices {
-		if svc.Name != "frontend" {
-			paths = append(paths, networkingv1.HTTPIngressPath{
-				Path:     "/" + svc.Name,
-				PathType: &pathType,
-				Backend: networkingv1.IngressBackend{
-					Service: &networkingv1.IngressServiceBackend{
-						Name: svc.Name,
-						Port: networkingv1.ServiceBackendPort{
-							Number: int32(svc.Port),
-						},
-					},
-				},
-			})
-		}
+		path := "/" + svc.Name
 
 		if svc.Name == "frontend" {
-			paths = append(paths, networkingv1.HTTPIngressPath{
-				Path:     "/",
-				PathType: &pathType,
-				Backend: networkingv1.IngressBackend{
-					Service: &networkingv1.IngressServiceBackend{
-						Name: svc.Name,
-						Port: networkingv1.ServiceBackendPort{
-							Number: int32(svc.Port),
-						},
+			path = "/"
+		}
+
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+
+		paths = append(paths, networkingv1.HTTPIngressPath{
+			Path:     path,
+			PathType: &pathType,
+			Backend: networkingv1.IngressBackend{
+				Service: &networkingv1.IngressServiceBackend{
+					Name: svc.Name,
+					Port: networkingv1.ServiceBackendPort{
+						Number: int32(svc.Port),
 					},
 				},
-			})
-		}
+			},
+		})
 	}
+
+	// Safety check
+	if len(paths) == 0 {
+		return fmt.Errorf("no services to expose via ingress")
+	}
+
+	classname := "nginx"
 
 	rule := networkingv1.IngressRule{
 		IngressRuleValue: networkingv1.IngressRuleValue{
@@ -68,29 +74,32 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cfg.Name,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class": "nginx",
+				"nginx.ingress.kubernetes.io/rewrite-target": "/",
 			},
 		},
 		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{rule},
+			IngressClassName: &classname,
+			Rules:            []networkingv1.IngressRule{rule},
 		},
 	}
 
-	ingressesClient := client.NetworkingV1().Ingresses("default")
+	ingressesClient := client.NetworkingV1().Ingresses(namespace)
 
-	_, err := ingressesClient.Create(context.TODO(), ingress, metav1.CreateOptions{})
+	_, err := ingressesClient.Create(ctx, ingress, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			fmt.Println("[6/6] Ingress Exists, updating...")
 
-			existing, err := ingressesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
+			existing, err := ingressesClient.Get(ctx, cfg.Name, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 
-			ingress.ResourceVersion = existing.ResourceVersion
+			// Replace only spec + annotations (safe update)
+			existing.Spec = ingress.Spec
+			existing.Annotations = ingress.Annotations
 
-			_, err = ingressesClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
+			_, err = ingressesClient.Update(ctx, existing, metav1.UpdateOptions{})
 			if err != nil {
 				return err
 			}
@@ -103,29 +112,33 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 
 	fmt.Println("[6/6] Ingress Completed")
 
-	// Output (generic, works everywhere)
-	fmt.Println("\nApp URLs:")
-	if cfg.Domain != "" {
-		for _, svc := range deployedServices {
-			if svc.Name == "frontend" {
-				fmt.Printf("%s: http://%s/\n", svc.Name, cfg.Domain)
-			} else {
-				fmt.Printf("%s: http://%s/%s\n", svc.Name, cfg.Domain, svc.Name)
-			}
-		}
-	} else {
-		fmt.Println("Use your cluster IP:")
-		fmt.Println("  minikube ip   (local)")
-		fmt.Println("  kubectl get svc -n ingress-nginx   (cloud)")
-		fmt.Println("Then access:")
-		for _, svc := range deployedServices {
-			if svc.Name == "frontend" {
-				fmt.Println("  http://<IP>/")
-			} else {
-				fmt.Printf("  http://<IP>/%s\n", svc.Name)
-			}
-		}
-	}
+	// ---- Output URLs ----
+	// fmt.Println("\nApp URLs:")
+
+	// baseURL, err := GetIngressBaseURL(client)
+	// if err != nil {
+	// 	fmt.Println("⚠ Could not auto-detect ingress IP")
+	// 	fmt.Println("Try:")
+	// 	fmt.Println("  minikube ip")
+	// 	fmt.Println("  kubectl get svc -n ingress-nginx")
+	// 	fmt.Println("Then access:")
+	// 	for _, svc := range deployedServices {
+	// 		if svc.Name == "frontend" {
+	// 			fmt.Println("  http://<IP>/")
+	// 		} else {
+	// 			fmt.Printf("  http://<IP>/%s\n", svc.Name)
+	// 		}
+	// 	}
+	// return nil
+	// }
+
+	// for _, svc := range deployedServices {
+	// 	if svc.Name == "frontend" {
+	// 		fmt.Printf("%s → %s/\n", svc.Name, baseURL)
+	// 	} else {
+	// 		fmt.Printf("%s → %s/%s\n", svc.Name, baseURL, svc.Name)
+	// 	}
+	// }
 
 	return nil
 }
@@ -205,7 +218,6 @@ func GetIngressURL(client *kubernetes.Clientset, deployedServices []ServiceInfo)
 
 	var baseURL string
 
-	// 1. LoadBalancer (cloud)
 	if len(svc.Status.LoadBalancer.Ingress) > 0 {
 		ing := svc.Status.LoadBalancer.Ingress[0]
 
@@ -216,7 +228,6 @@ func GetIngressURL(client *kubernetes.Clientset, deployedServices []ServiceInfo)
 		}
 	}
 
-	// 2. NodePort (local)
 	if baseURL == "" && svc.Spec.Type == corev1.ServiceTypeNodePort {
 		nodePort := svc.Spec.Ports[0].NodePort
 
@@ -233,12 +244,10 @@ func GetIngressURL(client *kubernetes.Clientset, deployedServices []ServiceInfo)
 		}
 	}
 
-	// ❌ If still empty → error
 	if baseURL == "" {
 		return nil, fmt.Errorf("could not determine ingress URL")
 	}
 
-	// 3. Build service URLs
 	if len(deployedServices) == 1 {
 		urls = append(urls, baseURL+"/")
 	} else {
@@ -248,4 +257,48 @@ func GetIngressURL(client *kubernetes.Clientset, deployedServices []ServiceInfo)
 	}
 
 	return urls, nil
+}
+
+func GetIngressBaseURL(client *kubernetes.Clientset) (string, error) {
+	ctx := context.TODO()
+	svc, err := client.CoreV1().
+		Services("ingress-nginx").
+		Get(ctx, "ingress-nginx-controller", metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	var baseURL string
+
+	if len(svc.Status.LoadBalancer.Ingress) > 0 {
+		ing := svc.Status.LoadBalancer.Ingress[0]
+
+		if ing.IP != "" {
+			baseURL = fmt.Sprintf("http://%s", ing.IP)
+		} else if ing.Hostname != "" {
+			baseURL = fmt.Sprintf("http://%s", ing.Hostname)
+		}
+	}
+
+	if baseURL == "" && svc.Spec.Type == corev1.ServiceTypeNodePort {
+		nodePort := svc.Spec.Ports[0].NodePort
+
+		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return "", err
+		}
+
+		for _, addr := range nodes.Items[0].Status.Addresses {
+			if addr.Type == corev1.NodeInternalIP {
+				baseURL = fmt.Sprintf("http://%s:%d", addr.Address, nodePort)
+				break
+			}
+		}
+	}
+
+	if baseURL == "" {
+		return "", fmt.Errorf("could not determine ingress URL")
+	}
+
+	return baseURL, nil
 }

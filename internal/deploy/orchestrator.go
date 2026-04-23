@@ -25,6 +25,14 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error getting k8s client: %v", err)
 	}
+	err = k8s.GetCurrentContext()
+	if err != nil {
+		return fmt.Errorf("error getting current context: %v", err)
+	}
+
+	if err := k8s.CreateNamespace(client, cfg.Name); err != nil {
+		return fmt.Errorf("error creating namespace: %v", err)
+	}
 
 	type ServiceInfo struct {
 		Name  string
@@ -64,7 +72,7 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("error waiting for deployment: %v", err)
 			}
 
-			if err := k8s.CreateService(client, k8s.ServiceInfo(svc)); err != nil {
+			if err := k8s.CreateService(client, cfg, k8s.ServiceInfo(svc)); err != nil {
 				return fmt.Errorf("error creating service: %v", err)
 			}
 			deployedServices = append(deployedServices, k8s.ServiceInfo(svc))
