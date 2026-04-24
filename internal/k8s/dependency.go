@@ -13,13 +13,13 @@ func CreateDependencies(ctx context.Context, client *kubernetes.Clientset, cfg *
 		switch dep.Type {
 		case "postgres":
 			fmt.Println("Postgres  					Creating...")
-			err := CreatePostgres(ctx, client, dep)
+			err := CreatePostgres(ctx, cfg, client, dep)
 			if err != nil {
 				return fmt.Errorf("Error creating postgres deployment: %v", err)
 			}
 		case "redis":
 			fmt.Println("Redis  					Creating...")
-			err := CreateRedis(ctx, client, dep)
+			err := CreateRedis(ctx, cfg, client, dep)
 			if err != nil {
 				return fmt.Errorf("Error creating redis deployment: %v", err)
 			}

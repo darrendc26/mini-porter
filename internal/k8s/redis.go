@@ -13,30 +13,31 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateRedis(ctx context.Context, client *kubernetes.Clientset, dep config.Dependency) error {
-	err := createRedisPVC(ctx, client, &dep)
+func CreateRedis(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep config.Dependency) error {
+	err := createRedisPVC(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error creating redis pvc: %v", err)
 	}
 
-	err = CreateRedisDeployment(ctx, client, &dep)
+	err = CreateRedisDeployment(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error creating redis deployment: %v", err)
 	}
-	err = createRedisService(ctx, client, &dep)
+	err = createRedisService(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error creating redis service: %v", err)
 	}
 
-	err = wait(ctx, client, &dep)
+	err = wait(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error waiting for redis deployment: %v", err)
 	}
 	return nil
 }
 
-func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	deploymentClient := client.AppsV1().Deployments("default")
+func CreateRedisDeployment(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	deploymentClient := client.AppsV1().Deployments(namespace)
 	envVars := buildEnvVars(dep.Env)
 
 	deployment := &appsV1.Deployment{
@@ -127,8 +128,9 @@ func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, de
 	return nil
 }
 
-func createRedisService(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	serviceClient := client.CoreV1().Services("default")
+func createRedisService(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	serviceClient := client.CoreV1().Services(namespace)
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -172,8 +174,9 @@ func createRedisService(ctx context.Context, client *kubernetes.Clientset, dep *
 	return nil
 }
 
-func createRedisPVC(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	pvcClient := client.CoreV1().PersistentVolumeClaims("default")
+func createRedisPVC(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	pvcClient := client.CoreV1().PersistentVolumeClaims(namespace)
 
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{

@@ -25,13 +25,15 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error getting k8s client: %v", err)
 	}
-	err = k8s.GetCurrentContext()
+	context, err := k8s.GetCurrentContext()
 	if err != nil {
 		return fmt.Errorf("error getting current context: %v", err)
 	}
 
-	if err := k8s.CreateNamespace(client, cfg.Name); err != nil {
+	if err := k8s.CreateNamespace(ctx, client, cfg.Name); err != nil {
 		return fmt.Errorf("error creating namespace: %v", err)
+	} else {
+		fmt.Println("Namespace Created")
 	}
 
 	type ServiceInfo struct {
@@ -68,7 +70,7 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("error creating deployment: %v", err)
 			}
 
-			if err := k8s.WaitForDeployment(client, svc.Name); err != nil {
+			if err := k8s.WaitForDeployment(client, cfg, svc.Name); err != nil {
 				return fmt.Errorf("error waiting for deployment: %v", err)
 			}
 
@@ -90,6 +92,16 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("error creating dependencies: %v", err)
 	}
 
+	if context == "minikube" {
+		if err := k8s.InstallIngressMinikube(); err != nil {
+			return fmt.Errorf("error installing ingress: %v", err)
+		}
+	} else {
+		if err := k8s.InstallIngressNginx(); err != nil {
+			return fmt.Errorf("error installing ingress: %v", err)
+		}
+	}
+
 	urls, err := k8s.GetIngressURL(client, deployedServices)
 	if err != nil {
 		return fmt.Errorf("error getting ingress URL: %v", err)
@@ -104,7 +116,7 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	// for _, url := range urlList {
 	// 	fmt.Println(url)
 	// }
-	fmt.Println("Run command:\n mini-porter host add ")
+	// fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }
 

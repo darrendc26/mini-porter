@@ -3,6 +3,9 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"time"
 
 	"github.com/darrendc26/mini-porter/internal/config"
 
@@ -22,7 +25,6 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 	pathType := networkingv1.PathTypePrefix
 	var paths []networkingv1.HTTPIngressPath
 
-	// Deduplicate paths
 	seen := make(map[string]bool)
 
 	for _, svc := range deployedServices {
@@ -51,7 +53,6 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 		})
 	}
 
-	// Safety check
 	if len(paths) == 0 {
 		return fmt.Errorf("no services to expose via ingress")
 	}
@@ -95,7 +96,6 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 				return err
 			}
 
-			// Replace only spec + annotations (safe update)
 			existing.Spec = ingress.Spec
 			existing.Annotations = ingress.Annotations
 
@@ -117,11 +117,7 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 
 	// baseURL, err := GetIngressBaseURL(client)
 	// if err != nil {
-	// 	fmt.Println("⚠ Could not auto-detect ingress IP")
-	// 	fmt.Println("Try:")
-	// 	fmt.Println("  minikube ip")
-	// 	fmt.Println("  kubectl get svc -n ingress-nginx")
-	// 	fmt.Println("Then access:")
+
 	// 	for _, svc := range deployedServices {
 	// 		if svc.Name == "frontend" {
 	// 			fmt.Println("  http://<IP>/")
@@ -301,4 +297,51 @@ func GetIngressBaseURL(client *kubernetes.Clientset) (string, error) {
 	}
 
 	return baseURL, nil
+}
+
+func IngressExists(client *kubernetes.Clientset, cfg *config.Config) bool {
+	_, err := client.CoreV1().Services("ingress-nginx").Get(context.TODO(), "ingress-nginx-controller", metav1.GetOptions{})
+
+	return err == nil
+}
+
+func InstallIngressMinikube() error {
+	cmd := exec.Command(
+		"minikube",
+		"addons",
+		"enable",
+		"ingress",
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func InstallIngressNginx() error {
+	cmd := exec.Command(
+		"kubectl",
+		"apply",
+		"-f",
+		"https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml",
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func WaitForIngress(client *kubernetes.Clientset, cfg *config.Config) error {
+	for {
+		svc, err := client.CoreV1().Services("ingress-nginx").Get(context.TODO(), "ingress-nginx-controller", metav1.GetOptions{})
+		if err == nil && svc.Status.LoadBalancer.Ingress != nil {
+			fmt.Println("Ingress Ready")
+			return nil
+		}
+
+		fmt.Println("Waiting for Ingress...")
+		time.Sleep(5 * time.Second)
+	}
 }

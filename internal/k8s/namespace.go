@@ -10,8 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateNamespace(client *kubernetes.Clientset, namespace string) error {
-	ctx := context.TODO()
+func CreateNamespace(ctx context.Context, client *kubernetes.Clientset, namespace string) error {
 
 	_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
@@ -34,6 +33,10 @@ func CreateNamespace(client *kubernetes.Clientset, namespace string) error {
 
 	_, err = client.CoreV1().Namespaces().Create(ctx, namespaceObj, metav1.CreateOptions{})
 	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			fmt.Printf("Namespace %s already exists\n", namespace)
+			return nil
+		}
 		return fmt.Errorf("failed to create namespace: %w", err)
 	}
 

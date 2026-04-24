@@ -17,22 +17,22 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreatePostgres(ctx context.Context, client *kubernetes.Clientset, dependency config.Dependency) error {
-	err := createPostgresPVC(ctx, client, &dependency)
+func CreatePostgres(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dependency config.Dependency) error {
+	err := createPostgresPVC(ctx, cfg, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error creating postgres pvc: %v", err)
 	}
 
-	err = createPostgresDeployment(ctx, client, &dependency)
+	err = createPostgresDeployment(ctx, cfg, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error creating postgres deployment: %v", err)
 	}
-	err = createPostgresService(ctx, client, &dependency)
+	err = createPostgresService(ctx, cfg, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error creating postgres service: %v", err)
 	}
 
-	err = wait(ctx, client, &dependency)
+	err = wait(ctx, cfg, client, &dependency)
 	if err != nil {
 		return fmt.Errorf("Error waiting for postgres deployment: %v", err)
 	}
@@ -40,8 +40,9 @@ func CreatePostgres(ctx context.Context, client *kubernetes.Clientset, dependenc
 	return nil
 }
 
-func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	deploymentClient := client.AppsV1().Deployments("default")
+func createPostgresDeployment(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	deploymentClient := client.AppsV1().Deployments(namespace)
 	envVars := buildEnvVars(dep.Env)
 
 	deployment := &appsV1.Deployment{
@@ -81,16 +82,20 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 					Containers: []corev1.Container{
 						{
 							Name:  dep.Name,
-							Image: "postgres:latest",
+							Image: "postgres:16",
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 5432},
 							},
 
-							Env: envVars,
+							Env: append(envVars, corev1.EnvVar{
+								Name:  "PGDATA",
+								Value: "/var/lib/postgresql/data/pgdata",
+							}),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "postgres-data",
-									MountPath: "/var/lib/postgresql/data",
+									MountPath: "/var/lib/postgresql",
+									// SubPath:   "pgdata",
 								},
 							},
 							ReadinessProbe: &corev1.Probe{
@@ -132,7 +137,7 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 		}
 
 		existing.Spec.Replicas = int32Ptr(int32(1))
-		existing.Spec.Template.Spec.Containers[0].Image = "postgres:latest"
+		existing.Spec.Template.Spec.Containers[0].Image = "postgres:16"
 		existing.Spec.Template.Spec.Containers[0].Env = envVars
 
 		_, err = deploymentClient.Update(ctx, existing, metav1.UpdateOptions{})
@@ -144,8 +149,9 @@ func createPostgresDeployment(ctx context.Context, client *kubernetes.Clientset,
 	return nil
 }
 
-func createPostgresService(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	serviceClient := client.CoreV1().Services("default")
+func createPostgresService(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	serviceClient := client.CoreV1().Services(namespace)
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -189,8 +195,9 @@ func createPostgresService(ctx context.Context, client *kubernetes.Clientset, de
 	return nil
 }
 
-func createPostgresPVC(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	pvcClient := client.CoreV1().PersistentVolumeClaims("default")
+func createPostgresPVC(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	pvcClient := client.CoreV1().PersistentVolumeClaims(namespace)
 
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -200,6 +207,7 @@ func createPostgresPVC(ctx context.Context, client *kubernetes.Clientset, dep *c
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			},
+			StorageClassName: ptr("standard"),
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse("1Gi"),
@@ -256,17 +264,32 @@ func buildEnvVars(env map[string]string) []corev1.EnvVar {
 	return result
 }
 
-func wait(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	deployment, _ := client.AppsV1().Deployments("default").Get(ctx, dep.Name, metav1.GetOptions{})
+func wait(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
 
-	ready := deployment.Status.ReadyReplicas
-	total := *deployment.Spec.Replicas
+	for {
+		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, dep.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get deployment %s: %w", dep.Name, err)
+		}
 
-	fmt.Printf("Pods Ready: %d/%d\n", ready, total)
+		ready := deployment.Status.ReadyReplicas
+		total := *deployment.Spec.Replicas
 
-	if ready == total && total > 0 {
-		return nil
+		fmt.Printf("Pods Ready: %d/%d\n", ready, total)
+
+		if total > 0 && ready == total {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for deployment %s to become ready", dep.Name)
+		case <-time.After(12 * time.Second):
+		}
 	}
-	time.Sleep(12 * time.Second)
-	return wait(ctx, client, dep)
+}
+
+func ptr(i string) *string {
+	return &i
 }
