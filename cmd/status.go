@@ -30,7 +30,8 @@ var statusCmd = &cobra.Command{
 		}
 
 		for _, service := range cfg.Services {
-			deploymentsClient := client.AppsV1().Deployments("default")
+			namespace := cfg.Name
+			deploymentsClient := client.AppsV1().Deployments(namespace)
 			deployment, err := deploymentsClient.Get(ctx, service.Name, metav1.GetOptions{})
 			if err != nil {
 				fmt.Printf("Error getting deployment: %v\n", err)
@@ -40,7 +41,7 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Replicas: %d/%d\n",
 				deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 
-			pods, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{
+			pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("app=%s", service.Name),
 			})
 			if err != nil {
@@ -54,7 +55,8 @@ var statusCmd = &cobra.Command{
 		}
 
 		for _, dep := range cfg.Dependencies {
-			deploymentsClient := client.AppsV1().Deployments("default")
+			namespace := cfg.Name
+			deploymentsClient := client.AppsV1().Deployments(namespace)
 			deployment, err := deploymentsClient.Get(context.TODO(), dep.Name, metav1.GetOptions{})
 			if err != nil {
 				fmt.Printf("Error getting deployment: %v\n", err)
@@ -64,7 +66,7 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Replicas: %d/%d\n",
 				deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 
-			pods, err := client.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
+			pods, err := client.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("app=%s", dep.Name),
 			})
 			if err != nil {
