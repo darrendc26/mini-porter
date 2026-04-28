@@ -112,30 +112,6 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 
 	fmt.Println("[6/6] Ingress Completed")
 
-	// ---- Output URLs ----
-	// fmt.Println("\nApp URLs:")
-
-	// baseURL, err := GetIngressBaseURL(client)
-	// if err != nil {
-
-	// 	for _, svc := range deployedServices {
-	// 		if svc.Name == "frontend" {
-	// 			fmt.Println("  http://<IP>/")
-	// 		} else {
-	// 			fmt.Printf("  http://<IP>/%s\n", svc.Name)
-	// 		}
-	// 	}
-	// return nil
-	// }
-
-	// for _, svc := range deployedServices {
-	// 	if svc.Name == "frontend" {
-	// 		fmt.Printf("%s → %s/\n", svc.Name, baseURL)
-	// 	} else {
-	// 		fmt.Printf("%s → %s/%s\n", svc.Name, baseURL, svc.Name)
-	// 	}
-	// }
-
 	return nil
 }
 
@@ -255,48 +231,93 @@ func GetIngressURL(client *kubernetes.Clientset, deployedServices []ServiceInfo)
 	return urls, nil
 }
 
-func GetIngressBaseURL(client *kubernetes.Clientset) (string, error) {
-	ctx := context.TODO()
-	svc, err := client.CoreV1().
-		Services("ingress-nginx").
-		Get(ctx, "ingress-nginx-controller", metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
+// func GetIngressBaseURL(client *kubernetes.Clientset, ctx context.Context) (string, error) {
+// 	// ctx := context.TODO()
+// 	svc, err := client.CoreV1().
+// 		Services("ingress-nginx").
+// 		Get(ctx, "ingress-nginx-controller", metav1.GetOptions{})
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	var baseURL string
+// 	var baseURL string
 
-	if len(svc.Status.LoadBalancer.Ingress) > 0 {
-		ing := svc.Status.LoadBalancer.Ingress[0]
+// 	if len(svc.Status.LoadBalancer.Ingress) > 0 {
+// 		ing := svc.Status.LoadBalancer.Ingress[0]
 
-		if ing.IP != "" {
-			baseURL = fmt.Sprintf("http://%s", ing.IP)
-		} else if ing.Hostname != "" {
-			baseURL = fmt.Sprintf("http://%s", ing.Hostname)
-		}
-	}
+// 		if ing.IP != "" {
+// 			baseURL = fmt.Sprintf("http://%s", ing.IP)
+// 		} else if ing.Hostname != "" {
+// 			baseURL = fmt.Sprintf("http://%s", ing.Hostname)
+// 		}
+// 	}
 
-	if baseURL == "" && svc.Spec.Type == corev1.ServiceTypeNodePort {
-		nodePort := svc.Spec.Ports[0].NodePort
+// 	if baseURL == "" && svc.Spec.Type == corev1.ServiceTypeNodePort {
+// 		nodePort := svc.Spec.Ports[0].NodePort
 
-		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+// 		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+// 		if err != nil {
+// 			return "", err
+// 		}
+
+// 		for _, addr := range nodes.Items[0].Status.Addresses {
+// 			if addr.Type == corev1.NodeInternalIP {
+// 				baseURL = fmt.Sprintf("http://%s:%d", addr.Address, nodePort)
+// 				break
+// 			}
+// 		}
+// 	}
+
+// 	if baseURL == "" {
+// 		WaitForURL(client, ctx)
+// 	}
+
+// 	return baseURL, nil
+// }
+
+func WaitForURL(client *kubernetes.Clientset, ctx context.Context) (string, error) {
+	for i := 0; i < 30; i++ {
+		svc, err := client.CoreV1().
+			Services("ingress-nginx").
+			Get(ctx, "ingress-nginx-controller", metav1.GetOptions{})
 		if err != nil {
 			return "", err
 		}
 
-		for _, addr := range nodes.Items[0].Status.Addresses {
-			if addr.Type == corev1.NodeInternalIP {
-				baseURL = fmt.Sprintf("http://%s:%d", addr.Address, nodePort)
-				break
+		if len(svc.Status.LoadBalancer.Ingress) > 0 {
+			ing := svc.Status.LoadBalancer.Ingress[0]
+
+			if ing.IP != "" {
+				fmt.Println("✅ Ingress ready at:", ing.IP)
+				return fmt.Sprintf("http://%s", ing.IP), nil
+			}
+			if ing.Hostname != "" {
+				fmt.Println("Ingress ready at:", ing.Hostname)
+				return fmt.Sprintf("http://%s", ing.Hostname), nil
 			}
 		}
+
+		if svc.Spec.Type == corev1.ServiceTypeNodePort {
+			nodePort := svc.Spec.Ports[0].NodePort
+
+			nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return "", err
+			}
+
+			for _, addr := range nodes.Items[0].Status.Addresses {
+				if addr.Type == corev1.NodeExternalIP {
+					fmt.Println("Using NodePort fallback:", addr.Address)
+					return fmt.Sprintf("http://%s:%d", addr.Address, nodePort), nil
+				}
+			}
+		}
+
+		fmt.Println("Waiting for ingress external IP...")
+		time.Sleep(10 * time.Second)
 	}
 
-	if baseURL == "" {
-		return "", fmt.Errorf("could not determine ingress URL")
-	}
-
-	return baseURL, nil
+	return "", fmt.Errorf("timeout waiting for ingress external IP")
 }
 
 func IngressExists(client *kubernetes.Clientset, cfg *config.Config) bool {

@@ -78,7 +78,40 @@ func saveCredentials(creds Credentials) error {
 	return nil
 }
 
-func loadCredentials() (Credentials, error) {
+// func loadCredentials() (Credentials, error) {
+// 	path, err := getCredentialsPath()
+// 	if err != nil {
+// 		return Credentials{}, err
+// 	}
+// 	file, err := os.Open(path)
+// 	if err != nil {
+// 		return Credentials{}, fmt.Errorf("error opening file: %v", err)
+// 	}
+// 	defer file.Close()
+// 	decoder := json.NewDecoder(file)
+// 	var creds Credentials
+// 	err = decoder.Decode(&creds)
+// 	if err != nil {
+// 		return Credentials{}, fmt.Errorf("error decoding JSON: %v", err)
+// 	}
+// 	return creds, nil
+// }
+
+func getCredentialsPath() (string, error) {
+	path, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("error getting home directory: %v", err)
+	}
+	path = filepath.Join(path, ".mini-porter")
+	err = os.MkdirAll(path, 0755)
+	if err != nil {
+		return "", fmt.Errorf("error creating directory: %v", err)
+	}
+	path = filepath.Join(path, "credentials.json")
+	return path, nil
+}
+
+func getCredentials() (Credentials, error) {
 	path, err := getCredentialsPath()
 	if err != nil {
 		return Credentials{}, err
@@ -95,18 +128,4 @@ func loadCredentials() (Credentials, error) {
 		return Credentials{}, fmt.Errorf("error decoding JSON: %v", err)
 	}
 	return creds, nil
-}
-
-func getCredentialsPath() (string, error) {
-	path, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("error getting home directory: %v", err)
-	}
-	path = filepath.Join(path, ".mini-porter")
-	err = os.MkdirAll(path, 0755)
-	if err != nil {
-		return "", fmt.Errorf("error creating directory: %v", err)
-	}
-	path = filepath.Join(path, "credentials.json")
-	return path, nil
 }

@@ -119,6 +119,3 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	// fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }
-
-// 	return fmt.Errorf("no projects found")
-// }

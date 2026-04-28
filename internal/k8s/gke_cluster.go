@@ -18,6 +18,9 @@ import (
 )
 
 func CreateGKECluster(ctx context.Context, credPath, projectID, region, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Minute) // ← increase timeout
+	defer cancel()
+
 	svc, err := container.NewService(ctx,
 		option.WithCredentialsFile(credPath),
 	)
@@ -25,42 +28,57 @@ func CreateGKECluster(ctx context.Context, credPath, projectID, region, name str
 		return err
 	}
 
-	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, region)
-
-	cluster := &container.Cluster{
-		Name:             name,
-		InitialNodeCount: 1,
-		Locations: []string{
-			region + "-a",
-			region + "-b",
-			region + "-c",
-		},
+	zones := []string{
+		region + "-a",
+		region + "-b",
+		region + "-c",
 	}
 
-	req := &container.CreateClusterRequest{
-		Cluster: cluster,
-	}
+	for _, zone := range zones {
+		fmt.Println("Trying zone:", zone)
 
-	op, err := svc.Projects.Locations.Clusters.Create(parent, req).Do()
+		parent := fmt.Sprintf("projects/%s/locations/%s", projectID, zone)
 
-	if err != nil {
-		if gErr, ok := err.(*googleapi.Error); ok && gErr.Code == 409 {
-			fmt.Println("⚠️ Cluster already exists, skipping creation...")
-		} else {
-			return err
+		cluster := &container.Cluster{
+			Name:             name,
+			InitialNodeCount: 2,
+			NodeConfig: &container.NodeConfig{
+				MachineType: "e2-small",
+			},
 		}
-	} else {
-		fmt.Println("⏳ Creating cluster (this may take 2–5 minutes)...")
+
+		op, err := svc.Projects.Locations.Clusters.Create(parent, &container.CreateClusterRequest{
+			Cluster: cluster,
+		}).Do()
+		if err != nil {
+			if gErr, ok := err.(*googleapi.Error); ok && gErr.Code == 409 {
+				fmt.Println("Cluster already exists, skipping creation...")
+				return setupKubeconfig(ctx, svc, credPath, projectID, zone, name)
+			}
+			if isStockoutError(err) {
+				fmt.Println("Stockout in", zone, "- trying next zone...")
+				continue
+			}
+			return fmt.Errorf("failed to create cluster: %w", err)
+		}
+
+		fmt.Println(" Creating cluster (10-20 min)...")
 
 		opName := op.Name
 		if !strings.Contains(opName, "projects/") {
 			opName = fmt.Sprintf("projects/%s/locations/%s/operations/%s",
-				projectID, region, op.Name)
+				projectID, zone, op.Name)
 		}
 
-		fmt.Printf("Check status at https://console.cloud.google.com/kubernetes/clusters/details/%s/%s/overview?project=%s",
-			region, name, projectID)
+		zoneStockout := false
+
 		for {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("cluster creation timed out after waiting")
+			default:
+			}
+
 			opStatus, err := svc.Projects.Locations.Operations.Get(opName).Do()
 			if err != nil {
 				return fmt.Errorf("failed to get operation status: %w", err)
@@ -68,18 +86,32 @@ func CreateGKECluster(ctx context.Context, credPath, projectID, region, name str
 
 			if opStatus.Status == "DONE" {
 				if opStatus.Error != nil {
+					if isStockoutError(fmt.Errorf("%v", opStatus.Error)) {
+						fmt.Println("Stockout in", zone, "- retrying next zone...")
+						zoneStockout = true
+						break
+					}
 					return fmt.Errorf("cluster creation failed: %v", opStatus.Error)
 				}
-				fmt.Println("Cluster creation completed")
-				break
+				fmt.Println("Cluster created in zone:", zone)
+				return setupKubeconfig(ctx, svc, credPath, projectID, zone, name)
 			}
-			if opStatus.Status == "RUNNING" {
-				time.Sleep(10 * time.Second)
-			}
+
+			fmt.Println("Still provisioning")
+			time.Sleep(15 * time.Second)
+		}
+
+		if zoneStockout {
+			continue
 		}
 	}
 
-	// 🔍 Fetch cluster details (always)
+	return fmt.Errorf("all zones exhausted in region %s. Try another region like us-central1", region)
+}
+
+func setupKubeconfig(ctx context.Context, svc *container.Service, credPath, projectID, zone, name string) error {
+	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, zone)
+
 	clusterResp, err := svc.Projects.Locations.Clusters.Get(
 		fmt.Sprintf("%s/clusters/%s", parent, name),
 	).Do()
@@ -133,12 +165,14 @@ func CreateGKECluster(ctx context.Context, credPath, projectID, region, name str
 		return err
 	}
 
-	fmt.Println("✅ Kubeconfig merged successfully")
-	fmt.Println("🔄 Switched context to:", name)
-
-	time.Sleep(20 * time.Second)
+	fmt.Println("Kubeconfig merged")
+	fmt.Println("Current context:", name)
 
 	return nil
+}
+
+func isStockoutError(err error) bool {
+	return strings.Contains(err.Error(), "GCE_STOCKOUT")
 }
 
 func MergeKubeConfig(newConfig clientcmdapi.Config, contextName string) error {
