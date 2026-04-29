@@ -2,10 +2,14 @@ package k8s
 
 import (
 	"fmt"
-	"strings"
+	"net"
+	"net/url"
+	"os"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	clusterType "github.com/darrendc26/mini-porter/internal/config"
 )
 
 func GetClient() (*kubernetes.Clientset, error) {
@@ -25,25 +29,47 @@ func GetClient() (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(restConfig)
 }
 
-func GetCurrentContext() (string, error) {
-	cfg, _ := clientcmd.NewDefaultClientConfigLoadingRules().Load()
-	ctx := cfg.CurrentContext
+func GetCurrentClusterType() (clusterType.ClusterType, error) {
+	kubeconfigPath := os.Getenv("HOME") + "/.kube/config"
 
-	switch {
-	case strings.Contains(ctx, "minikube"):
-		fmt.Println("Current context : minikube")
-		return "minikube", nil
-	case strings.Contains(ctx, "gke"):
-		fmt.Println("Current context : GCP")
-		return "gke", nil
-	case strings.Contains(ctx, "eks"):
-		fmt.Println("Current context : AWS")
-		return "eks", nil
-	case strings.Contains(ctx, "do-"):
-		fmt.Println("Current context : DigitalOcean")
-		return "do", nil
-	default:
-		fmt.Println("Environment unknown")
+	config, err := clientcmd.LoadFromFile(kubeconfigPath)
+	if err != nil {
+		return clusterType.UnknownCluster, err
 	}
-	return "", nil
+
+	ctx := config.Contexts[config.CurrentContext]
+	if ctx == nil {
+		return clusterType.UnknownCluster, fmt.Errorf("no context found")
+	}
+
+	cluster := config.Clusters[ctx.Cluster]
+	if cluster == nil {
+		return clusterType.UnknownCluster, fmt.Errorf("no cluster found")
+	}
+
+	// 🔍 check server
+	u, err := url.Parse(cluster.Server)
+	if err != nil {
+		return clusterType.UnknownCluster, err
+	}
+
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+
+	// ✅ LOCAL
+	if ip != nil && (ip.IsPrivate() || ip.IsLoopback()) {
+		fmt.Println("Current context: LOCAL")
+		return clusterType.LocalCluster, nil
+	}
+
+	// ✅ GCP
+	auth := config.AuthInfos[ctx.AuthInfo]
+	if auth != nil && auth.AuthProvider != nil && auth.AuthProvider.Name == "gcp" {
+		fmt.Println("Current context: GCP")
+		return clusterType.GCPCluster, nil
+	}
+
+	// 🌐 fallback
+	fmt.Println("Current context: CLOUD")
+	return clusterType.CloudCluster, nil
 }

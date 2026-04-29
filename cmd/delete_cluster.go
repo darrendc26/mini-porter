@@ -15,6 +15,7 @@ import (
 )
 
 // go run main.go cluster delete -n minikube
+// go run main.go cluster delete   -n miniporter-cluster   -l asia-south2-a   -p miniporter
 
 var location string
 var deleteClusterCmd = &cobra.Command{
@@ -26,18 +27,16 @@ var deleteClusterCmd = &cobra.Command{
 			return
 		}
 
-		// 🔥 Local cluster case
 		if clusterName == "minikube" {
 			err := deleteLocalCluster()
 			if err != nil {
-				fmt.Println("❌ Failed to delete local cluster:", err)
+				fmt.Println("Failed to delete local cluster:", err)
 				return
 			}
-			fmt.Println("✅ Minikube deleted successfully")
+			fmt.Println("Minikube deleted successfully")
 			return
 		}
 
-		// 🔥 Cloud cluster case
 		if projectID == "" || location == "" {
 			fmt.Println("project-id and location are required for cloud clusters")
 			return
@@ -45,7 +44,7 @@ var deleteClusterCmd = &cobra.Command{
 
 		err := deleteGKECluster()
 		if err != nil {
-			fmt.Println("❌ Failed to delete GKE cluster:", err)
+			fmt.Println("Failed to delete GKE cluster:", err)
 			return
 		}
 	},
@@ -97,14 +96,19 @@ func deleteGKECluster() error {
 		fmt.Println(err)
 		return err
 	}
+
 	fmt.Println("Deleting cluster...")
+	fmt.Println("This may take a few minutes.")
+
+	fmt.Println("You can safely press Ctrl+C to exit.")
+	fmt.Println("The deletion will continue in the background.")
 
 	opName := op.Name
 	if !strings.Contains(opName, "projects/") {
 		opName = fmt.Sprintf(
 			"projects/%s/locations/%s/operations/%s",
 			projectID,
-			region,
+			location,
 			op.Name,
 		)
 	}
@@ -119,13 +123,13 @@ func deleteGKECluster() error {
 		if opStatus.Status == "DONE" {
 			if opStatus.Error != nil {
 				fmt.Println("Delete failed:", opStatus.Error)
-				return err
+				return nil
 			}
 			break
 		}
 
-		fmt.Println("⏳ Deleting...")
-		time.Sleep(5 * time.Second)
+		fmt.Println("Deleting...")
+		time.Sleep(30 * time.Second)
 	}
 
 	kubeconfigPath := os.Getenv("HOME") + "/.kube/config"
@@ -141,9 +145,9 @@ func deleteGKECluster() error {
 		}
 
 		clientcmd.WriteToFile(*config, kubeconfigPath)
-		fmt.Println("🧹 Removed kubeconfig context:", clusterName)
+		fmt.Println("Removed kubeconfig context:", clusterName)
 	}
 
-	fmt.Println("✅ Cluster deleted successfully")
+	fmt.Println("Cluster deleted successfully")
 	return nil
 }

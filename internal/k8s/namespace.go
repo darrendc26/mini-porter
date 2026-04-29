@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -14,6 +15,9 @@ func CreateNamespace(ctx context.Context, client *kubernetes.Clientset, namespac
 
 	_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
+		if strings.Contains(err.Error(), "Unauthorized") {
+			return fmt.Errorf("kubernetes auth expired: run 'gcloud auth login'")
+		}
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get namespace: %w", err)
 		}

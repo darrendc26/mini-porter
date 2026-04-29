@@ -19,8 +19,8 @@ dependencies:
       POSTGRES_PASSWORD: postgres 
       POSTGRES_DB: postgres
     
-  # - name: redis
-  #   type: redis
-  #   port: 6379
-  #   env:
-  #     REDIS_PASSWORD: redis
+  - name: redis
+    type: redis
+    port: 6379
+    env:
+      REDIS_PASSWORD: redis

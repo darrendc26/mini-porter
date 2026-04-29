@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/darrendc26/mini-porter/internal/config"
+	clusterType "github.com/darrendc26/mini-porter/internal/config"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,9 +13,21 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo ServiceInfo) error {
+func CreateService(client *kubernetes.Clientset, ctxtype clusterType.ClusterType, cfg *config.Config, serviceInfo ServiceInfo) error {
 	namespace := cfg.Name
 	servicesClient := client.CoreV1().Services(namespace)
+
+	var serviceType corev1.ServiceType = corev1.ServiceTypeClusterIP
+	switch ctxtype {
+	case clusterType.LocalCluster:
+		serviceType = corev1.ServiceTypeNodePort
+
+	case clusterType.CloudCluster, clusterType.GCPCluster:
+		serviceType = corev1.ServiceTypeLoadBalancer
+
+	default:
+		serviceType = corev1.ServiceTypeClusterIP
+	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -25,7 +38,7 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
+			Type: serviceType,
 			Selector: map[string]string{
 				"app": serviceInfo.Name,
 			},

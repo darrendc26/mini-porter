@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/darrendc26/mini-porter/internal/config"
+	clusterType "github.com/darrendc26/mini-porter/internal/config"
 	"github.com/darrendc26/mini-porter/internal/detector"
 	"github.com/darrendc26/mini-porter/internal/docker"
 	"github.com/darrendc26/mini-porter/internal/k8s"
@@ -25,15 +26,13 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("error getting k8s client: %v", err)
 	}
-	context, err := k8s.GetCurrentContext()
+	context, err := k8s.GetCurrentClusterType()
 	if err != nil {
 		return fmt.Errorf("error getting current context: %v", err)
 	}
 
 	if err := k8s.CreateNamespace(ctx, client, cfg.Name); err != nil {
 		return fmt.Errorf("error creating namespace: %v", err)
-	} else {
-		fmt.Println("Namespace Created")
 	}
 
 	type ServiceInfo struct {
@@ -74,7 +73,7 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("error waiting for deployment: %v", err)
 			}
 
-			if err := k8s.CreateService(client, cfg, k8s.ServiceInfo(svc)); err != nil {
+			if err := k8s.CreateService(client, context, cfg, k8s.ServiceInfo(svc)); err != nil {
 				return fmt.Errorf("error creating service: %v", err)
 			}
 			deployedServices = append(deployedServices, k8s.ServiceInfo(svc))
@@ -102,7 +101,7 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	urls, err := k8s.GetIngressURL(client, deployedServices)
+	urls, err := k8s.GetAppURLs(client, clusterType.ClusterType(context), cfg.Name, deployedServices)
 	if err != nil {
 		return fmt.Errorf("error getting ingress URL: %v", err)
 	}
