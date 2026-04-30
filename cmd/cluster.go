@@ -51,12 +51,12 @@ var clusterCreateCmd = &cobra.Command{
 
 func init() {
 	clusterCmd.AddCommand(clusterCreateCmd)
-	rootCmd.AddCommand(clusterCmd)
 	clusterCreateCmd.Flags().StringVarP(&env, "env", "e", "", "Environment")
 	clusterCreateCmd.Flags().StringVarP(&projectID, "project-id", "p", "", "Project ID")
 	clusterCreateCmd.Flags().StringVarP(&region, "region", "r", "", "Region")
 	clusterCreateCmd.Flags().StringVarP(&clusterName, "name", "n", "", "Cluster name")
 	clusterCreateCmd.Flags().StringVarP(&credPath, "path", "P", "", "Path to the credentials JSON file")
+	rootCmd.AddCommand(clusterCmd)
 }
 
 func createGCPCluster(projectID, region, clusterName string) error {

@@ -73,6 +73,11 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
+		if len(config.Contexts) == 0 {
+			fmt.Println("No clusters found")
+			return nil
+		}
+
 		fmt.Println("Available clusters:")
 
 		for name, ctx := range config.Contexts {

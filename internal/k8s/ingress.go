@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 
@@ -182,8 +181,8 @@ func InstallIngressMinikube() error {
 		"ingress",
 	)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 
 	return cmd.Run()
 }
@@ -196,8 +195,8 @@ func InstallIngressNginx() error {
 		"https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml",
 	)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 
 	return cmd.Run()
 }
@@ -238,7 +237,7 @@ func getLocalURLs(
 		if err != nil {
 			return nil, err
 		}
-		println(svc.Spec.Type)
+
 		if svc.Spec.Type != corev1.ServiceTypeNodePort {
 			return nil, fmt.Errorf("service %s is not NodePort", svcInfo.Name)
 		}
@@ -279,7 +278,7 @@ func waitForLoadBalancerIP(
 ) (string, error) {
 
 	timeout := time.After(5 * time.Minute)
-	ticker := time.Tick(15 * time.Second)
+	ticker := time.Tick(25 * time.Second)
 
 	for {
 		select {
@@ -301,12 +300,12 @@ func waitForLoadBalancerIP(
 				ing := svc.Status.LoadBalancer.Ingress[0]
 
 				if ing.IP != "" {
-					fmt.Println("Service ready at:", ing.IP)
+					// fmt.Println("Service ready at:", ing.IP)
 					return ing.IP, nil
 				}
 
 				if ing.Hostname != "" {
-					fmt.Println("Service ready at:", ing.Hostname)
+					// fmt.Println("Service ready at:", ing.Hostname)
 					return ing.Hostname, nil
 				}
 			}

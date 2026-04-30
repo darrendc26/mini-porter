@@ -129,7 +129,7 @@ func deleteGKECluster() error {
 		}
 
 		fmt.Println("Deleting...")
-		time.Sleep(30 * time.Second)
+		time.Sleep(50 * time.Second)
 	}
 
 	kubeconfigPath := os.Getenv("HOME") + "/.kube/config"
