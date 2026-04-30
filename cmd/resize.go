@@ -37,7 +37,7 @@ var resizeCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
-		err := k8s.ResizeNodePool(ctx, credPath.Credentials, projectID, region, clusterName, size)
+		err = k8s.ResizeNodePool(ctx, credPath.Credentials, projectID, region, clusterName, size)
 		if err != nil {
 			return fmt.Errorf("failed to resize node pool: %w", err)
 		}

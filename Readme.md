@@ -10,31 +10,49 @@
 
 mini-porter is a minimal Platform-as-a-Service (PaaS) CLI that lets you deploy applications to Kubernetes with a single command.
 
-To deploy your app, run:
+Deploy your app with:
 ```bash
 mini-porter deploy
 ```
 
-It handles:
+##What it does
 
-* Docker image build
-* Image push (optional)
-* Kubernetes deployment
-* Service exposure
-* Ingress + domain setup
+mini-porter abstracts away Kubernetes complexity and handles:
+
+* Docker image build & push
+* Kubernetes Deployment creation
+* Service exposure (NodePort / LoadBalancer)
+* Ingress + routing
+* Environment-aware networking
 
 ---
 
 ## Features
-
-* mini-porter.yaml file generation (`mini-porter init`)
-* One-command deploy (`mini-porter deploy`)
-* Docker build & push
-* Kubernetes Deployment & Service creation
-* Ingress with custom domain (`.miniporter`)
-* Status inspection (`mini-porter status`)
-* Clean teardown (`mini-porter delete`)
-* Clean architecture (CLI → Orchestrator → Infra modules)
+* Project Setup
+  - Generate config with `mini-porter init`
+  - Zero boilerplate, works with any app
+* Authentication
+  - One-command credential setup: `mini-porter login`
+* Cluster Management
+  - Create clusters: `mini-porter cluster create`
+  - List clusters: `mini-porter cluster list`
+  - Delete clusters: `mini-porter cluster delete`
+* Deployment
+  - One-command deploy: `mini-porter deploy`
+  - Automatically builds Docker images and pushes to registry
+  - creates Deployments & Services
+* Smart Networking
+  - Local → NodePort
+  - Cloud → LoadBalancer
+  - Prints correct access URL automatically
+* Observability
+  - `mini-porter status` for health checks
+  - Detects:
+    pod readiness
+    auth failures
+    networking issues
+* Cleanup
+  - mini-porter delete for full teardown
 
 ---
 
@@ -96,41 +114,10 @@ kubectl get nodes
 
 ---
 
-### Start a local cluster (if needed)
-
-Using Minikube:
-
-```bash
-minikube start
-minikube addons enable ingress
-```
-
-Or using kind:
-
-```bash
-kind create cluster
-```
----
-
 ## Requirements
 
 To deploy an application, your project must include:
 Literally nothing... Just a working application is all that's needed.
-
----
-
-### Example `porter.yaml`
-
-```yaml
-name: my-app
-image: yourdockerhubusername/my-app
-port: 3000
-replicas: 1
-services:
-  - name: my-app
-    path: .
-    port: 3000
-```
 
 ---
 
@@ -143,7 +130,16 @@ cd examples/node-app
 # Generates a mini-porter.yaml file
 mini-porter init
 ```
+---
+```bash
+#  To deploy to a cloud cluster
+mini-porter login -p <credentials.json> -P <cloud-provider>
 
+mini-porter cluster create --env gcp  --project-id <project-id> --region <region> --name <cluster-name>
+
+# To deploy to a local cluster
+mini-porter cluster create --env local
+```
 ---
 
 ### 2. Deploy
@@ -154,20 +150,10 @@ mini-porter deploy
 
 ---
 
-### 3. Access your app
-
-After deployment:
-
-```text
-http://my-app.local
-```
-
-If not configured yet, run:
-
+### 3. Resize your GKE cluster
 ```bash
-mini-porter host add
+mini-porter resize -p <project-id> -r <region> -n <cluster-name> -s <size>
 ```
-
 ---
 
 ### 4. Check status
@@ -184,8 +170,6 @@ mini-porter status
 # Deletes the entire app deployment
 mini-porter delete
 
-# To delete a single service
-mini-porter delete <service-name>
 ```
 
 ---
@@ -197,17 +181,17 @@ mini-porter performs:
 1. Builds Docker image
 2. Pushes image to registry
 3. Creates Kubernetes Deployment
-4. Exposes Service (NodePort)
+4. Exposes Service 
 5. Creates Ingress for domain routing
-6. Optionally adds local DNS entry
-7. Sets up postgres and redis databases (if needed)
+6. Sets up postgres and redis databases (if needed)
+7. Prints correct access URL automatically
 
 ---
 
 ## Design Decisions
 
-* **NodePort over LoadBalancer**
-  → Simpler local development with Minikube
+* **Environment-aware networking**
+  → NodePort (local) vs LoadBalancer (cloud)
 
 * **YAML config (****`mini-porter.yaml`****)**
   → Explicit and predictable deployments
@@ -237,7 +221,7 @@ Use it to test the full deployment flow.
 * Ingress auto-setup (no manual hosts entry)
 * HTTPS support (cert-manager)
 * Autoscaling (HPA)
-* Remote cluster support (AWS/GCP)
+* Multi cloud support (AWS/GCP)
 * Web dashboard
 
 ---
