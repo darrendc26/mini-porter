@@ -56,20 +56,19 @@ func GetCurrentClusterType() (clusterType.ClusterType, error) {
 	host := u.Hostname()
 	ip := net.ParseIP(host)
 
-	// ✅ LOCAL
+	// LOCAL
 	if ip != nil && (ip.IsPrivate() || ip.IsLoopback()) {
 		fmt.Println("Current context: LOCAL")
 		return clusterType.LocalCluster, nil
 	}
 
-	// ✅ GCP
+	// GCP
 	auth := config.AuthInfos[ctx.AuthInfo]
 	if auth != nil && auth.AuthProvider != nil && auth.AuthProvider.Name == "gcp" {
 		fmt.Println("Current context: GCP")
 		return clusterType.GCPCluster, nil
 	}
 
-	// 🌐 fallback
 	fmt.Println("Current context: CLOUD")
 	return clusterType.CloudCluster, nil
 }

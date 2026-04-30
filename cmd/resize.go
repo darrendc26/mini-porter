@@ -34,15 +34,6 @@ var resizeCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get credentials: %w", err)
 		}
-		// if credPath == "" {
-		// 	credPath, err := getCredentialsPath()
-		// 	if err != nil {
-		// 		return fmt.Errorf("failed to get credentials path: %w", err)
-		// 	}
-		// 	if credPath == "" {
-		// 		return fmt.Errorf("no credentials found. Run `miniporter login`")
-		// 	}
-		// }
 
 		ctx := context.Background()
 		err = k8s.ResizeNodePool(ctx, credPath.Credentials, projectID, region, clusterName, size)
