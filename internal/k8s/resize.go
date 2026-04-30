@@ -10,9 +10,15 @@ import (
 	"google.golang.org/api/option"
 )
 
-func ResizeNodePool(ctx context.Context, credPath string, projectID string, zone string, clusterName string, size int64) error {
+type Credentials struct {
+	Provider    string `json:"provider"`
+	Credentials string `json:"credentials"`
+}
+
+func ResizeNodePool(ctx context.Context, credPath Credentials, projectID string, zone string, clusterName string, size int64) error {
+	credPath = getCredentials()
 	svc, err := container.NewService(ctx,
-		option.WithCredentialsFile(credPath),
+		option.WithCredentialsFile(credPath.Credentials),
 	)
 	if err != nil {
 		return err

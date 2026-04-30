@@ -30,19 +30,22 @@ var resizeCmd = &cobra.Command{
 		if size == 0 {
 			return fmt.Errorf("size is required")
 		}
-
-		if credPath == "" {
-			credPath, err := getCredentialsPath()
-			if err != nil {
-				return fmt.Errorf("failed to get credentials path: %w", err)
-			}
-			if credPath == "" {
-				return fmt.Errorf("no credentials found. Run `miniporter login`")
-			}
+		credPath, err := getCredentials()
+		if err != nil {
+			return fmt.Errorf("failed to get credentials: %w", err)
 		}
+		// if credPath == "" {
+		// 	credPath, err := getCredentialsPath()
+		// 	if err != nil {
+		// 		return fmt.Errorf("failed to get credentials path: %w", err)
+		// 	}
+		// 	if credPath == "" {
+		// 		return fmt.Errorf("no credentials found. Run `miniporter login`")
+		// 	}
+		// }
 
 		ctx := context.Background()
-		err := k8s.ResizeNodePool(ctx, credPath, projectID, region, clusterName, size)
+		err = k8s.ResizeNodePool(ctx, credPath.Credentials, projectID, region, clusterName, size)
 		if err != nil {
 			return fmt.Errorf("failed to resize node pool: %w", err)
 		}
@@ -57,5 +60,5 @@ func init() {
 	resizeCmd.Flags().StringVarP(&region, "region", "r", "", "Region")
 	resizeCmd.Flags().StringVarP(&clusterName, "name", "n", "", "Cluster name")
 	resizeCmd.Flags().Int64VarP(&size, "size", "s", 0, "Node pool size")
-	resizeCmd.Flags().StringVarP(&credPath, "path", "P", "", "Path to the credentials JSON file")
+	// resizeCmd.Flags().StringVarP(&credPath, "path", "P", "", "Path to the credentials JSON file")
 }
