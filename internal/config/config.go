@@ -27,6 +27,7 @@ type Config struct {
 	Replicas     int          `yaml:"replicas"`
 	Services     []Service    `yaml:"services"`
 	Dependencies []Dependency `yaml:"dependencies"`
+	Domain       string       `yaml:"domain,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {

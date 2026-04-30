@@ -7,30 +7,37 @@ import (
 	"github.com/darrendc26/mini-porter/internal/config"
 	appsV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateRedis(ctx context.Context, client *kubernetes.Clientset, dep config.Dependency) error {
-	err := CreateRedisDeployment(ctx, client, &dep)
+func CreateRedis(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep config.Dependency) error {
+	err := createRedisPVC(ctx, cfg, client, &dep)
+	if err != nil {
+		return fmt.Errorf("Error creating redis pvc: %v", err)
+	}
+
+	err = CreateRedisDeployment(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error creating redis deployment: %v", err)
 	}
-	err = createRedisService(ctx, client, &dep)
+	err = createRedisService(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error creating redis service: %v", err)
 	}
 
-	err = wait(ctx, client, &dep)
+	err = wait(ctx, cfg, client, &dep)
 	if err != nil {
 		return fmt.Errorf("Error waiting for redis deployment: %v", err)
 	}
 	return nil
 }
 
-func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	deploymentClient := client.AppsV1().Deployments("default")
+func CreateRedisDeployment(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	deploymentClient := client.AppsV1().Deployments(namespace)
 	envVars := buildEnvVars(dep.Env)
 
 	deployment := &appsV1.Deployment{
@@ -57,12 +64,28 @@ func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, de
 					},
 				},
 				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{
+						{
+							Name: "redis-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: dep.Name + "-pvc",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  dep.Name,
 							Image: "redis:latest",
 							Ports: []corev1.ContainerPort{
-								{ContainerPort: *int32Ptr(int32(dep.Port))},
+								{ContainerPort: int32(dep.Port)},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "redis-data",
+									MountPath: "/data",
+								},
 							},
 							Env: envVars,
 							ReadinessProbe: &corev1.Probe{
@@ -70,6 +93,7 @@ func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, de
 									Exec: &corev1.ExecAction{
 										Command: []string{
 											"redis-cli",
+											"-a", dep.Env["REDIS_PASSWORD"],
 											"ping",
 										},
 									},
@@ -104,8 +128,9 @@ func CreateRedisDeployment(ctx context.Context, client *kubernetes.Clientset, de
 	return nil
 }
 
-func createRedisService(ctx context.Context, client *kubernetes.Clientset, dep *config.Dependency) error {
-	serviceClient := client.CoreV1().Services("default")
+func createRedisService(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	serviceClient := client.CoreV1().Services(namespace)
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -143,6 +168,44 @@ func createRedisService(ctx context.Context, client *kubernetes.Clientset, dep *
 		_, err = serviceClient.Update(ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to update service: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func createRedisPVC(ctx context.Context, cfg *config.Config, client *kubernetes.Clientset, dep *config.Dependency) error {
+	namespace := cfg.Name
+	pvcClient := client.CoreV1().PersistentVolumeClaims(namespace)
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: dep.Name + "-pvc",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+
+	_, err := pvcClient.Create(ctx, pvc, metav1.CreateOptions{})
+	if err != nil {
+		existing, err := pvcClient.Get(ctx, dep.Name+"-pvc", metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("Failed to get existing pvc: %w", err)
+		}
+
+		existing.Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("1Gi")
+
+		_, err = pvcClient.Update(ctx, existing, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("Failed to update pvc: %w", err)
 		}
 	}
 

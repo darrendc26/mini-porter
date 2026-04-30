@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/darrendc26/mini-porter/internal/config"
+	clusterType "github.com/darrendc26/mini-porter/internal/config"
 	"github.com/darrendc26/mini-porter/internal/detector"
 	"github.com/darrendc26/mini-porter/internal/docker"
 	"github.com/darrendc26/mini-porter/internal/k8s"
 )
 
 func Deploy(ctx context.Context, cfg *config.Config) error {
-	var urlList []string
+	// var urlList []string
 	var deployedServices []k8s.ServiceInfo
 	wd, err := os.Getwd()
 	if err != nil {
@@ -24,6 +25,14 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 	client, err := k8s.GetClient()
 	if err != nil {
 		return fmt.Errorf("error getting k8s client: %v", err)
+	}
+	context, err := k8s.GetCurrentClusterType()
+	if err != nil {
+		return fmt.Errorf("error getting current context: %v", err)
+	}
+
+	if err := k8s.CreateNamespace(ctx, client, cfg.Name); err != nil {
+		return fmt.Errorf("error creating namespace: %v", err)
 	}
 
 	type ServiceInfo struct {
@@ -60,20 +69,18 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("error creating deployment: %v", err)
 			}
 
-			if err := k8s.WaitForDeployment(client, svc.Name); err != nil {
+			if err := k8s.WaitForDeployment(client, cfg, svc.Name); err != nil {
 				return fmt.Errorf("error waiting for deployment: %v", err)
 			}
 
-			if url, err := k8s.CreateService(client, cfg, k8s.ServiceInfo(svc)); err != nil {
+			if err := k8s.CreateService(client, context, cfg, k8s.ServiceInfo(svc)); err != nil {
 				return fmt.Errorf("error creating service: %v", err)
-			} else {
-				urlList = append(urlList, url)
 			}
-
 			deployedServices = append(deployedServices, k8s.ServiceInfo(svc))
+
+			fmt.Println("-----------------------------------")
+			fmt.Println(" ")
 		}
-		fmt.Println("-----------------------------------")
-		fmt.Println(" ")
 	}
 
 	if err := k8s.CreateIngress(client, cfg, deployedServices); err != nil {
@@ -84,10 +91,30 @@ func Deploy(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("error creating dependencies: %v", err)
 	}
 
-	fmt.Println("Deployment completed successfully!")
-	for _, url := range urlList {
+	if context == "minikube" {
+		if err := k8s.InstallIngressMinikube(); err != nil {
+			return fmt.Errorf("error installing ingress: %v", err)
+		}
+	} else {
+		if err := k8s.InstallIngressNginx(); err != nil {
+			return fmt.Errorf("error installing ingress: %v", err)
+		}
+	}
+
+	urls, err := k8s.GetAppURLs(client, clusterType.ClusterType(context), cfg.Name, deployedServices)
+	if err != nil {
+		return fmt.Errorf("error getting ingress URL: %v", err)
+	}
+
+	fmt.Println("App URL:")
+	for _, url := range urls {
 		fmt.Println(url)
 	}
-	fmt.Println("Run command:\n mini-porter host add ")
+
+	fmt.Println("Deployment completed successfully!")
+	// for _, url := range urlList {
+	// 	fmt.Println(url)
+	// }
+	// fmt.Println("Run command:\n mini-porter host add ")
 	return nil
 }

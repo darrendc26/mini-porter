@@ -21,6 +21,8 @@ var deleteCmd = &cobra.Command{
 		ctx := context.Background()
 
 		cfg, err := config.LoadConfig("mini-porter.yaml")
+		namespace := cfg.Name
+
 		if err != nil {
 			fmt.Printf("Error loading config: %v\n", err)
 			return
@@ -44,7 +46,7 @@ var deleteCmd = &cobra.Command{
 
 		//  Delete Deployments
 		fmt.Println("Deleting deployments...")
-		err = client.AppsV1().Deployments("default").DeleteCollection(
+		err = client.AppsV1().Deployments(namespace).DeleteCollection(
 			ctx,
 			metav1.DeleteOptions{},
 			metav1.ListOptions{LabelSelector: labelSelector},
@@ -56,7 +58,7 @@ var deleteCmd = &cobra.Command{
 
 		//  Delete Services
 		fmt.Println("Deleting services...")
-		servicesClient := client.CoreV1().Services("default")
+		servicesClient := client.CoreV1().Services(namespace)
 
 		svcList, err := servicesClient.List(ctx, metav1.ListOptions{
 			LabelSelector: labelSelector,
@@ -77,7 +79,7 @@ var deleteCmd = &cobra.Command{
 
 		//  Delete Pods (cleanup)
 		fmt.Println("Deleting pods...")
-		err = client.CoreV1().Pods("default").DeleteCollection(
+		err = client.CoreV1().Pods(namespace).DeleteCollection(
 			ctx,
 			metav1.DeleteOptions{},
 			metav1.ListOptions{LabelSelector: labelSelector},

@@ -3,25 +3,42 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"time"
 
 	"github.com/darrendc26/mini-porter/internal/config"
 
+	ct "github.com/darrendc26/mini-porter/internal/config"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-// var ingress *networkingv1.Ingress
-
 func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedServices []ServiceInfo) error {
+	ctx := context.TODO()
+	namespace := cfg.Name
 
 	pathType := networkingv1.PathTypePrefix
-
 	var paths []networkingv1.HTTPIngressPath
 
+	seen := make(map[string]bool)
+
 	for _, svc := range deployedServices {
+		path := "/" + svc.Name
+
+		if svc.Name == "frontend" {
+			path = "/"
+		}
+
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+
 		paths = append(paths, networkingv1.HTTPIngressPath{
-			Path:     "/" + svc.Name,
+			Path:     path,
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
@@ -34,51 +51,64 @@ func CreateIngress(client *kubernetes.Clientset, cfg *config.Config, deployedSer
 		})
 	}
 
-	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: cfg.Name,
-		},
-		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: cfg.Name + ".miniporter",
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: paths,
-						},
-					},
-				},
+	if len(paths) == 0 {
+		return fmt.Errorf("no services to expose via ingress")
+	}
+
+	classname := "nginx"
+
+	rule := networkingv1.IngressRule{
+		IngressRuleValue: networkingv1.IngressRuleValue{
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: paths,
 			},
 		},
 	}
 
-	ingressesClient := client.NetworkingV1().Ingresses("default")
+	if cfg.Domain != "" {
+		rule.Host = cfg.Domain
+	}
 
-	_, err := ingressesClient.Create(context.TODO(), ingress, metav1.CreateOptions{})
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cfg.Name,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/rewrite-target": "/",
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &classname,
+			Rules:            []networkingv1.IngressRule{rule},
+		},
+	}
+
+	ingressesClient := client.NetworkingV1().Ingresses(namespace)
+
+	_, err := ingressesClient.Create(ctx, ingress, metav1.CreateOptions{})
 	if err != nil {
-		fmt.Println("Ingress 					Exists, updating...")
+		if apierrors.IsAlreadyExists(err) {
+			fmt.Println("[6/6] Ingress Exists, updating...")
 
-		existing, getErr := ingressesClient.Get(context.TODO(), cfg.Name, metav1.GetOptions{})
-		if getErr != nil {
-			return getErr
-		}
+			existing, err := ingressesClient.Get(ctx, cfg.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
 
-		ingress.ResourceVersion = existing.ResourceVersion
+			existing.Spec = ingress.Spec
+			existing.Annotations = ingress.Annotations
 
-		_, err = ingressesClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
-		if err != nil {
+			_, err = ingressesClient.Update(ctx, existing, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+		} else {
 			return err
 		}
 	} else {
-		fmt.Println("[6/6] Ingress 					Creating...")
+		fmt.Println("[6/6] Ingress Created")
 	}
 
-	fmt.Println("[6/6] Ingress 					Completed")
-
-	fmt.Println("\nApp URLs:")
-	for _, svc := range deployedServices {
-		fmt.Printf("%s is live: http://%s.miniporter/%s\n", svc.Name, cfg.Name, svc.Name)
-	}
+	fmt.Println("[6/6] Ingress Completed")
 
 	return nil
 }
@@ -105,7 +135,6 @@ func DeleteIngressRule(client kubernetes.Interface, cfg *config.Config, serviceN
 		return fmt.Errorf("failed to get ingress: %w", err)
 	}
 
-	// Filter rules
 	for i, rule := range ingress.Spec.Rules {
 		if rule.HTTP == nil {
 			continue
@@ -122,7 +151,6 @@ func DeleteIngressRule(client kubernetes.Interface, cfg *config.Config, serviceN
 		ingress.Spec.Rules[i].HTTP.Paths = newPaths
 	}
 
-	// 🔥 If no paths left → delete ingress
 	empty := true
 	for _, rule := range ingress.Spec.Rules {
 		if rule.HTTP != nil && len(rule.HTTP.Paths) > 0 {
@@ -136,7 +164,6 @@ func DeleteIngressRule(client kubernetes.Interface, cfg *config.Config, serviceN
 		return ingressClient.Delete(ctx, cfg.Name, metav1.DeleteOptions{})
 	}
 
-	// Update ingress
 	_, err = ingressClient.Update(ctx, ingress, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update ingress: %w", err)
@@ -144,4 +171,146 @@ func DeleteIngressRule(client kubernetes.Interface, cfg *config.Config, serviceN
 
 	fmt.Printf("Ingress updated: removed %s\n", serviceName)
 	return nil
+}
+
+func InstallIngressMinikube() error {
+	cmd := exec.Command(
+		"minikube",
+		"addons",
+		"enable",
+		"ingress",
+	)
+
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	return cmd.Run()
+}
+
+func InstallIngressNginx() error {
+	cmd := exec.Command(
+		"kubectl",
+		"apply",
+		"-f",
+		"https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml",
+	)
+
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	return cmd.Run()
+}
+
+func GetAppURLs(
+	client *kubernetes.Clientset,
+	clusterType ct.ClusterType,
+	namespace string,
+	deployedServices []ServiceInfo,
+) ([]string, error) {
+
+	switch ct.ClusterType(clusterType) {
+
+	case ct.LocalCluster:
+		return getLocalURLs(client, namespace, deployedServices)
+
+	case ct.CloudCluster, ct.GCPCluster:
+		return getCloudURLs(client, namespace, deployedServices)
+
+	default:
+		return nil, fmt.Errorf("unknown cluster type")
+	}
+}
+
+func getLocalURLs(
+	client *kubernetes.Clientset,
+	namespace string,
+	services []ServiceInfo,
+) ([]string, error) {
+
+	var urls []string
+
+	for _, svcInfo := range services {
+
+		svc, err := client.CoreV1().
+			Services(namespace).
+			Get(context.TODO(), svcInfo.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+
+		if svc.Spec.Type != corev1.ServiceTypeNodePort {
+			return nil, fmt.Errorf("service %s is not NodePort", svcInfo.Name)
+		}
+
+		ip, err := GetMinikubeIP()
+
+		port := svc.Spec.Ports[0].NodePort
+		urls = append(urls, fmt.Sprintf("http://%s:%d/%s", ip, port, svcInfo.Name))
+	}
+
+	return urls, nil
+}
+
+func getCloudURLs(
+	client *kubernetes.Clientset,
+	namespace string,
+	services []ServiceInfo,
+) ([]string, error) {
+
+	var urls []string
+
+	for _, svcInfo := range services {
+
+		ip, err := waitForLoadBalancerIP(client, namespace, svcInfo.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		urls = append(urls, fmt.Sprintf("http://%s:%d/%s", ip, svcInfo.Port, svcInfo.Name))
+	}
+
+	return urls, nil
+}
+
+func waitForLoadBalancerIP(
+	client *kubernetes.Clientset,
+	namespace, serviceName string,
+) (string, error) {
+
+	timeout := time.After(5 * time.Minute)
+	ticker := time.Tick(25 * time.Second)
+
+	for {
+		select {
+
+		case <-timeout:
+			return "", fmt.Errorf("timeout waiting for LoadBalancer IP")
+
+		case <-ticker:
+
+			svc, err := client.CoreV1().
+				Services(namespace).
+				Get(context.TODO(), serviceName, metav1.GetOptions{})
+
+			if err != nil {
+				continue
+			}
+
+			if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				ing := svc.Status.LoadBalancer.Ingress[0]
+
+				if ing.IP != "" {
+					// fmt.Println("Service ready at:", ing.IP)
+					return ing.IP, nil
+				}
+
+				if ing.Hostname != "" {
+					// fmt.Println("Service ready at:", ing.Hostname)
+					return ing.Hostname, nil
+				}
+			}
+
+			fmt.Println("Waiting for external IP...")
+		}
+	}
 }

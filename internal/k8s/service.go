@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/darrendc26/mini-porter/internal/config"
-
+	clusterType "github.com/darrendc26/mini-porter/internal/config"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,24 +13,39 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo ServiceInfo) (string, error) {
-	// fmt.Println("[5/6] Service 					creating...")
+func CreateService(client *kubernetes.Clientset, ctxtype clusterType.ClusterType, cfg *config.Config, serviceInfo ServiceInfo) error {
+	namespace := cfg.Name
+	servicesClient := client.CoreV1().Services(namespace)
 
-	servicesClient := client.CoreV1().Services("default")
+	var serviceType corev1.ServiceType = corev1.ServiceTypeClusterIP
+	switch ctxtype {
+	case clusterType.LocalCluster:
+		serviceType = corev1.ServiceTypeNodePort
+
+	case clusterType.CloudCluster, clusterType.GCPCluster:
+		serviceType = corev1.ServiceTypeLoadBalancer
+
+	default:
+		serviceType = corev1.ServiceTypeClusterIP
+	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: serviceInfo.Name,
+			Labels: map[string]string{
+				"app":        serviceInfo.Name,
+				"managed-by": "mini-porter",
+			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeNodePort,
+			Type: serviceType,
 			Selector: map[string]string{
 				"app": serviceInfo.Name,
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Protocol: corev1.ProtocolTCP,
-					// TODO: Handle multiple services and ports
+					Name:       "http",
+					Protocol:   corev1.ProtocolTCP,
 					Port:       int32(serviceInfo.Port),
 					TargetPort: intstr.FromInt(serviceInfo.Port),
 				},
@@ -38,63 +53,29 @@ func CreateService(client *kubernetes.Clientset, cfg *config.Config, serviceInfo
 		},
 	}
 
-	svc, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{})
+	_, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			fmt.Println("[5/6] Service 					Exists, updating...")
+			fmt.Println("[5/6] Service Exists, updating...")
 
 			existing, err := servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})
 			if err != nil {
-				return "", fmt.Errorf("failed to get existing service: %w", err)
+				return fmt.Errorf("failed to get existing service: %w", err)
 			}
 
 			service.ResourceVersion = existing.ResourceVersion
 			service.Spec.ClusterIP = existing.Spec.ClusterIP
 
-			svc, err = servicesClient.Update(context.TODO(), service, metav1.UpdateOptions{})
+			_, err = servicesClient.Update(context.TODO(), service, metav1.UpdateOptions{})
 			if err != nil {
-				return "", fmt.Errorf("failed to update service: %w", err)
+				return fmt.Errorf("failed to update service: %w", err)
 			}
 		} else {
-			return "", fmt.Errorf("failed to create service: %w", err)
+			return err
 		}
 	} else {
-		fmt.Println("[5/6] Service 					Created ")
+		fmt.Println("[5/6] Service Created")
 	}
 
-	svc, err = servicesClient.Get(context.TODO(), serviceInfo.Name, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch service: %w", err)
-	}
-
-	if len(svc.Spec.Ports) == 0 {
-		return "", fmt.Errorf("service has no ports")
-	}
-
-	nodePort := svc.Spec.Ports[0].NodePort
-
-	nodes, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to get nodes: %w", err)
-	}
-
-	if len(nodes.Items) == 0 {
-		return "", fmt.Errorf("no nodes found")
-	}
-
-	nodeIP := ""
-	for _, addr := range nodes.Items[0].Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP {
-			nodeIP = addr.Address
-			break
-		}
-	}
-
-	if nodeIP == "" {
-		return "", fmt.Errorf("could not determine node IP")
-	}
-
-	url := fmt.Sprintf("%s is live: http://%s:%d\n", serviceInfo.Name, nodeIP, nodePort)
-
-	return url, nil
+	return nil
 }
