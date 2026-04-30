@@ -126,9 +126,9 @@ Literally nothing... Just a working application is all that's needed.
 ### 1. Navigate to your app
 
 ```bash
-cd examples/node-app
 # Generates a mini-porter.yaml file
 mini-porter init
+# Edit values in .yaml file based on your project
 ```
 ---
 ```bash
